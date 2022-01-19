@@ -3,4 +3,4 @@
 	url = https://github.com/catchorg/Catch2
 [submodule "external/softfloat"]
 	path = external/softfloat
-	url = https://github.com/eosio/berkeley-softfloat-3
+	url = https://github.com/eosnetworkfoundation/mandel-berkeley-softfloat-3
