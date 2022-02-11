@@ -257,7 +257,7 @@ inline void register_profile_signal_handler_impl() {
    struct sigaction sa;
    sa.sa_sigaction = profile_handler;
    sigemptyset(&sa.sa_mask);
-   sa.sa_flags = SA_SIGINFO;
+   sa.sa_flags = SA_SIGINFO | SA_RESTART;
    sigaction(SIGPROF, &sa, nullptr);
 }
 
