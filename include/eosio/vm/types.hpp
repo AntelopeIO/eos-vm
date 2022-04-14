@@ -30,7 +30,7 @@ namespace eosio { namespace vm {
 
    struct activation_frame {
       opcode* pc;
-      uint16_t last_op_index;
+      uint32_t last_op_index;
    };
 
    struct resizable_limits {

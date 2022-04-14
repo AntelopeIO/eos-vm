@@ -85,4 +85,9 @@ BACKEND_TEST_CASE( "Test call depth dynamic", "[call_depth]") {
    CHECK_THROWS_AS(bkend.call("env", "call.host", (uint32_t)50), std::exception);
    CHECK(!bkend.call_with_return("env", "call.indirect.host", (uint32_t)49));
    CHECK_THROWS_AS(bkend.call("env", "call.indirect.host", (uint32_t)50), std::exception);
+
+   // Very large call depth requires dynamically allocating a new stack
+   bkend.initialize(nullptr, dynamic_options{1024*1024});
+
+   CHECK(!bkend.call_with_return("env", "call", (uint32_t)1024*1024 - 1));
 }

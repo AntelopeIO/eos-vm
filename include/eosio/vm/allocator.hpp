@@ -45,6 +45,40 @@ namespace eosio { namespace vm {
       size_t                     index = 0;
    };
 
+   // Conditionally allocates a new stack leaving enough room
+   // for host function and signal handler execution.  If
+   // the required stack size is small enough to fit in the
+   // regular program stack, does nothing and returns nullptr.
+   class stack_allocator {
+    public:
+      explicit stack_allocator(std::size_t min_size) {
+         if(min_size > 4*1024*1024) {
+            std::size_t pagesize = static_cast<std::size_t>(::sysconf(_SC_PAGESIZE));
+            _size = ((min_size + pagesize - 1) & ~(pagesize - 1)) + 4*1024*1024;
+            int flags = MAP_PRIVATE | MAP_ANONYMOUS;
+#ifdef MAP_STACK
+            flags |= MAP_STACK;
+#endif
+            _ptr = ::mmap(nullptr, _size, PROT_READ | PROT_WRITE, flags, -1, 0);
+         }
+      }
+      ~stack_allocator() {
+         if(_ptr) {
+            ::munmap(_ptr, _size);
+         }
+      }
+      void* top() const {
+         if(_ptr) {
+            return static_cast<char*>(_ptr) + _size;
+         } else {
+            return nullptr;
+         }
+      }
+   private:
+      void* _ptr = nullptr;
+      std::size_t _size;
+   };
+
    class contiguous_allocator {
       public:
          template<std::size_t align_amt>

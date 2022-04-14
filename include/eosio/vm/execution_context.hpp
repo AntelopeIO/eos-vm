@@ -286,16 +286,14 @@ namespace eosio { namespace vm {
                std::reverse(args_raw + 0, args_raw + sizeof...(Args));
                result = call_host_function(args_raw, func_index);
             } else {
-               const std::size_t stack_cutoff = std::max<std::size_t>(252144, SIGSTKSZ);
                std::size_t maximum_stack_usage =
-                  (_mod.maximum_stack + 2 /*frame ptr + return ptr*/) * (constants::max_call_depth + 1) +
+                  (_mod.maximum_stack + 2 /*frame ptr + return ptr*/) * (_remaining_call_depth + 1) +
                  sizeof...(Args) + 4 /* scratch space */;
-               void* stack = nullptr;
-               std::unique_ptr<native_value[]> alt_stack;
-               if (maximum_stack_usage > stack_cutoff/sizeof(native_value)) {
-                  maximum_stack_usage += SIGSTKSZ/sizeof(native_value);
-                  alt_stack.reset(new native_value[maximum_stack_usage + 3]);
-                  stack = alt_stack.get() + maximum_stack_usage;
+               stack_allocator alt_stack(maximum_stack_usage * sizeof(native_value));
+               // reserve 24 bytes for data accessed by inline assembly
+               void* stack = alt_stack.top();
+               if(stack) {
+                  stack = static_cast<char*>(stack) - 24;
                }
                auto fn = reinterpret_cast<native_value (*)(void*, void*)>(_mod.code[func_index - _mod.get_imported_functions_size()].jit_code_offset + _mod.allocator._code_base);
 
@@ -536,11 +534,11 @@ namespace eosio { namespace vm {
 
       inline uint32_t       table_elem(uint32_t i) { return _mod.tables[0].table[i]; }
       inline void           push_operand(operand_stack_elem el) { get_operand_stack().push(std::move(el)); }
-      inline operand_stack_elem get_operand(uint16_t index) const { return get_operand_stack().get(_last_op_index + index); }
-      inline void           eat_operands(uint16_t index) { get_operand_stack().eat(index); }
-      inline void           compact_operand(uint16_t index) { get_operand_stack().compact(index); }
-      inline void           set_operand(uint16_t index, const operand_stack_elem& el) { get_operand_stack().set(_last_op_index + index, el); }
-      inline uint16_t       current_operands_index() const { return get_operand_stack().current_index(); }
+      inline operand_stack_elem get_operand(uint32_t index) const { return get_operand_stack().get(_last_op_index + index); }
+      inline void           eat_operands(uint32_t index) { get_operand_stack().eat(index); }
+      inline void           compact_operand(uint32_t index) { get_operand_stack().compact(index); }
+      inline void           set_operand(uint32_t index, const operand_stack_elem& el) { get_operand_stack().set(_last_op_index + index, el); }
+      inline uint32_t       current_operands_index() const { return get_operand_stack().current_index(); }
       inline void           push_call(activation_frame&& el) { _as.push(std::move(el)); }
       inline activation_frame pop_call() { return _as.pop(); }
       inline uint32_t       call_depth()const { return _as.size(); }
@@ -840,7 +838,7 @@ namespace eosio { namespace vm {
          (constants::max_call_depth + 1) * sizeof(activation_frame)
       };
       execution_state _state;
-      uint16_t                        _last_op_index    = 0;
+      uint32_t                        _last_op_index    = 0;
       call_stack                      _as = { _base_allocator };
       opcode                          _halt;
       host_type*                      _host = nullptr;
