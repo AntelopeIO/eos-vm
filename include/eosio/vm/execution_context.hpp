@@ -312,11 +312,11 @@ namespace eosio { namespace vm {
 
                   vm::invoke_with_signal_handler([&]() {
                      result = execute<sizeof...(Args)>(args_raw, fn, this, base_type::linear_memory(), stack);
-                  }, handle_signal);
+                  }, &handle_signal);
                } else {
                   vm::invoke_with_signal_handler([&]() {
                      result = execute<sizeof...(Args)>(args_raw, fn, this, base_type::linear_memory(), stack);
-                  }, handle_signal);
+                  }, &handle_signal);
                }
             }
          } catch(wasm_exit_exception&) {
