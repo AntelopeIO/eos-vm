@@ -333,6 +333,7 @@ namespace eosio { namespace vm {
          __builtin_unreachable();
       }
 
+#ifdef __x64_64__
       int backtrace(void** out, int count, void* uc) const {
          static_assert(EnableBacktrace);
          void* end = this->_top_frame;
@@ -387,6 +388,7 @@ namespace eosio { namespace vm {
       }
 
       static constexpr bool async_backtrace() { return EnableBacktrace; }
+#endif
 
    protected:
 
@@ -401,6 +403,7 @@ namespace eosio { namespace vm {
          return result;
       }
 
+#ifdef __x86_64__
       /* TODO abstract this and clean this up a bit, this really doesn't belong here */
       template<int Count>
       static native_value execute(native_value* data, native_value (*fun)(void*, void*), jit_execution_context* context, void* linear_memory, void* stack) {
@@ -466,6 +469,7 @@ namespace eosio { namespace vm {
 #undef ASM_CODE
          return result;
       }
+#endif
 
       host_type * _host = nullptr;
       uint32_t _remaining_call_depth;

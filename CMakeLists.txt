@@ -60,6 +60,10 @@ target_include_directories(eos-vm
 # ignore the C++17 register warning until clean up
 target_compile_options( eos-vm INTERFACE $<$<COMPILE_LANGUAGE:CXX>:-Wno-register> )
 
+if (${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
+  target_link_options( eos-vm INTERFACE $<$<COMPILE_LANGUAGE:CXX>:-v> )
+endif()
+
 # ##################################################################################################
 # Enable debugging stats for eos-vm.
 # ##################################################################################################
