@@ -1,7 +1,6 @@
 #include <eosio/vm/backend.hpp>
 #include <eosio/vm/error_codes.hpp>
 #include <eosio/vm/watchdog.hpp>
-#include <eosio/vm/profile.hpp>
 
 #include <iostream>
 
@@ -20,15 +19,7 @@ int main(int argc, char** argv) {
       return -1;
    }
 
-   bool profile = false;
-   std::string filename;
-
-   if(argv[1] == std::string("-p")) {
-      profile = true;
-      filename = argv[2];
-   } else {
-      filename = argv[1];
-   }
+   std::string filename = argv[1];
 
    watchdog wd{std::chrono::seconds(3)};
 
