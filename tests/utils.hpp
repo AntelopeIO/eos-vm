@@ -52,5 +52,10 @@ inline eosio::vm::wasm_allocator* get_wasm_allocator() {
    return &alloc;
 }
 
+#ifdef __x86_64__
 #define BACKEND_TEST_CASE(name, tags) \
   TEMPLATE_TEST_CASE(name, tags, eosio::vm::interpreter, eosio::vm::jit)
+#else
+#define BACKEND_TEST_CASE(name, tags) \
+  TEMPLATE_TEST_CASE(name, tags, eosio::vm::interpreter)
+#endif

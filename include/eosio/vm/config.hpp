@@ -22,4 +22,10 @@ namespace eosio { namespace vm {
    inline constexpr bool eos_vm_debug = false;
 #endif
 
+#ifdef __x86_64__
+   inline constexpr bool eos_vm_amd64 = true;
+#else
+   inline constexpr bool eos_vm_amd64 = false;
+#endif
+
 }} // namespace eosio::vm
