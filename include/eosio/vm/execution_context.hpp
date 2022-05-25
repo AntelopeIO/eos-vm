@@ -333,7 +333,7 @@ namespace eosio { namespace vm {
          __builtin_unreachable();
       }
 
-#ifdef __x64_64__
+#ifdef __x86_64__
       int backtrace(void** out, int count, void* uc) const {
          static_assert(EnableBacktrace);
          void* end = this->_top_frame;
