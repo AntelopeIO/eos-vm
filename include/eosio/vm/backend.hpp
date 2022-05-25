@@ -10,7 +10,7 @@
 #include <eosio/vm/parser.hpp>
 #include <eosio/vm/types.hpp>
 
-#ifdef __x64_64__
+#ifdef __x86_64__
 #include <eosio/vm/x86_64.hpp>
 #endif
 
@@ -24,7 +24,7 @@
 
 namespace eosio { namespace vm {
 
-#ifdef __x64_64__
+#ifdef __x86_64__
    struct jit {
       template<typename Host>
       using context = jit_execution_context<Host>;
