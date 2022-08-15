@@ -14,7 +14,7 @@ EOS VM is designed from the ground up for the high demands of blockchain applica
 
 While EOS VM was designed for blockchain, we believe it is ideally suited for any application looking to embed a High Performance WebAssembly engine.
 
-We designed EOS VM to meet the needs of EOSIO blockchains after using three of the most common WebAssembly engines: Binaryen, WABT, and WAVM. These WebAssembly engines were the single largest source of security issues impacting EOSIO blockchains. While WAVM provides extremely fast execution, it is not suited to running a live blockchain because it has extremely long and unpredictable compilation times and the need to recompile all contracts every time the process restarts.  WABT was designed as a toolkit for manipulating WebAssembly first and as an execution engine second.
+We designed EOS VM to meet the needs of [Antelope](https://github.com/AntelopeIO/) blockchains after using three of the most common WebAssembly engines: Binaryen, WABT, and WAVM. These WebAssembly engines were the single largest source of security issues impacting Antelope blockchains. While WAVM provides extremely fast execution, it is not suited to running a live blockchain because it has extremely long and unpredictable compilation times and the need to recompile all contracts every time the process restarts.  WABT was designed as a toolkit for manipulating WebAssembly first and as an execution engine second.
 
 We considered the WebAssembly engines used by the largest browsers, but they all come with considerable overhead and assumptions which are inappropriate for a reusable library or to be embedded in a blockchain. It is our hope that one day major browsers will opt to switch to EOS VM. 
  
@@ -79,16 +79,3 @@ Extensions to Wasm itself can be made by simply defining the new section (aka C+
 
 ## Using EOS-VM
 [Quick Overview](./docs/OVERVIEW.md)
-
-
-## Contributing
-
-[Contributing Guide](./CONTRIBUTING.md)
-
-[Code of Conduct](./CONTRIBUTING.md#conduct)
-
-## Important
-
-See [LICENSE](./LICENSE) for copyright and license terms.
-
-All repositories and other materials are provided subject to the terms of this [IMPORTANT](./IMPORTANT.md) notice and you must familiarize yourself with its terms.  The notice contains important information, limitations and restrictions relating to our software, publications, trademarks, third-party resources, and forward-looking statements.  By accessing any of our repositories and other materials, you accept and agree to the terms of the notice.
