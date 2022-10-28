@@ -268,6 +268,11 @@ namespace eosio { namespace vm {
          get_operand_stack().eat(0);
       }
 
+// Calling execute() with no `args` (i.e. `execute(host_type,jit_visitor,uint32_t)`) results in a "statement has no effect
+// [-Werror=unused-value]" warning. Dissable for this function.
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-value"
+
       template <typename... Args>
       inline std::optional<operand_stack_elem> execute(host_type* host, jit_visitor, uint32_t func_index, Args... args) {
          auto saved_host = _host;
@@ -332,6 +337,10 @@ namespace eosio { namespace vm {
          }
          __builtin_unreachable();
       }
+
+// Re-enable unused value warning.
+#pragma GCC diagnostic push
+
 
 #ifdef __x86_64__
       int backtrace(void** out, int count, void* uc) const {
