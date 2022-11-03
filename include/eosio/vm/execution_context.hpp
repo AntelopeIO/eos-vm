@@ -285,7 +285,7 @@ namespace eosio { namespace vm {
          // Calling execute() with no `args` (i.e. `execute(host_type,jit_visitor,uint32_t)`) results in a "statement has no
          // effect [-Werror=unused-value]" warning on this line. Dissable warning.
          native_value args_raw[] = { transform_arg( static_cast<Args&&>(args))... };
-#pragma GCC diagnostic push
+#pragma GCC diagnostic pop
 
          try {
             if (func_index < _mod.get_imported_functions_size()) {
