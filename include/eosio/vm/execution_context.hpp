@@ -279,7 +279,13 @@ namespace eosio { namespace vm {
          const func_type& ft = _mod.get_function_type(func_index);
          this->type_check_args(ft, static_cast<Args&&>(args)...);
          native_value result;
-         native_value args_raw[] = { transform_arg(static_cast<Args&&>(args))... };
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-value"
+         // Calling execute() with no `args` (i.e. `execute(host_type,jit_visitor,uint32_t)`) results in a "statement has no
+         // effect [-Werror=unused-value]" warning on this line. Dissable warning.
+         native_value args_raw[] = { transform_arg( static_cast<Args&&>(args))... };
+#pragma GCC diagnostic pop
 
          try {
             if (func_index < _mod.get_imported_functions_size()) {
