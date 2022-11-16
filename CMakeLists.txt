@@ -55,8 +55,10 @@ include(EosVMBuildUtils)
 # ##################################################################################################
 add_library(eos-vm INTERFACE)
 target_include_directories(eos-vm
-                           INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/include
-                                     ${CMAKE_CURRENT_SOURCE_DIR}/external/softfloat/source/include)
+                           INTERFACE $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+                                     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/external/softfloat/source/include>
+                                     $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
+
 # ignore the C++17 register warning until clean up
 target_compile_options( eos-vm INTERFACE $<$<COMPILE_LANGUAGE:CXX>:-Wno-register> )
 
@@ -148,4 +150,3 @@ if(ENABLE_INSTALL)
       DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
       ${INSTALL_DIRECTORY_COMPONENT_ARGS})
 endif()
-
