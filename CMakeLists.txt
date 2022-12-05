@@ -138,7 +138,7 @@ if(ENABLE_INSTALL)
 
    include(GNUInstallDirs)
    message(STATUS "Installing...")
-   install(TARGETS eos-vm
+   install(TARGETS eos-vm ${EOSVM_INSTALL_EXPORT}
             LIBRARY
                DESTINATION ${CMAKE_INSTALL_LIBDIR}
                ${INSTALL_LIBRARY_TARGETS_COMPONENT_ARGS}
