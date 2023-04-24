@@ -308,7 +308,6 @@
 
 #define EOS_VM_CREATE_EXIT_TYPE(name, code)                                                                      \
    struct EOS_VM_OPCODE_T(name) {                                                                                      \
-      EOS_VM_OPCODE_T(name)() = default;                                                                               \
       uint32_t pc;                                                                                                     \
       static constexpr uint8_t opcode = code;                                                                          \
    };
@@ -328,7 +327,6 @@
 
 #define EOS_VM_CREATE_BR_TABLE_TYPE(name, code)                                                                        \
    struct EOS_VM_OPCODE_T(name) {                                                                                      \
-      EOS_VM_OPCODE_T(name)() = default;                                                                               \
       struct elem_t { uint32_t pc; uint32_t stack_pop; };                                                              \
       elem_t* table;                                                                                                   \
       uint32_t  size;                                                                                                  \
@@ -338,20 +336,17 @@
 
 #define EOS_VM_CREATE_TYPES(name, code)                                                                                \
    struct EOS_VM_OPCODE_T(name) {                                                                                      \
-      EOS_VM_OPCODE_T(name)() = default;                                                                               \
       static constexpr uint8_t opcode = code;                                                                          \
    };
 
 #define EOS_VM_CREATE_CALL_TYPES(name, code)                                                                           \
    struct EOS_VM_OPCODE_T(name) {                                                                                      \
-      EOS_VM_OPCODE_T(name)() = default;                                                                               \
       uint32_t index;                                                                                                  \
       static constexpr uint8_t opcode = code;                                                                          \
    };
 
 #define EOS_VM_CREATE_CALL_IMM_TYPES(name, code)                                                                       \
    struct EOS_VM_OPCODE_T(name) {                                                                                      \
-      EOS_VM_OPCODE_T(name)() = default;                                                                               \
       uint32_t index;                                                                                                  \
       uint16_t locals;                                                                                                 \
       uint16_t return_type;                                                                                            \
@@ -360,14 +355,12 @@
 
 #define EOS_VM_CREATE_VARIABLE_ACCESS_TYPES(name, code)                                                                \
    struct EOS_VM_OPCODE_T(name) {                                                                                      \
-      EOS_VM_OPCODE_T(name)() = default;                                                                               \
       uint32_t index;                                                                                                  \
       static constexpr uint8_t opcode = code;                                                                          \
    };
 
 #define EOS_VM_CREATE_MEMORY_TYPES(name, code)                                                                         \
    struct EOS_VM_OPCODE_T(name) {                                                                                      \
-      EOS_VM_OPCODE_T(name)() = default;                                                                               \
       uint32_t flags_align;                                                                                            \
       uint32_t offset;                                                                                                 \
       static constexpr uint8_t opcode = code;                                                                          \
