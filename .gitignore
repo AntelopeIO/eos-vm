@@ -38,6 +38,10 @@
 
 # Build Artifacts
 build.tar.gz
-build/
+[Bb]uild*/
 compile_commands.json
 Testing/
+
+# IDE Files
+CMakeLists.txt.user
+.vscode
