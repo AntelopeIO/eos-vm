@@ -123,6 +123,10 @@ namespace eosio { namespace vm {
       inline void reset() {
          EOS_VM_ASSERT(_mod.error == nullptr, wasm_interpreter_exception, _mod.error);
 
+         // Reset the capacity of underlying memory used by operand stack if it is
+         // greater than initial_stack_size
+         _os.reset_capacity();
+
          _linear_memory = _wasm_alloc->get_base_ptr<char>();
          if(_mod.memories.size()) {
             EOS_VM_ASSERT(_mod.memories[0].limits.initial <= _max_pages, wasm_bad_alloc, "Cannot allocate initial linear memory.");
