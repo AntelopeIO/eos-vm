@@ -301,6 +301,7 @@ namespace eosio { namespace vm {
       }
 
       void parse_module(wasm_code_ptr& code_ptr, size_t sz, module& mod, DebugInfo& debug) {
+         elog("parse ${t}", ("t", fc::time_point::now().time_since_epoch()));
          _mod = &mod;
          EOS_VM_ASSERT(parse_magic(code_ptr) == constants::magic, wasm_parse_exception, "magic number did not match");
          EOS_VM_ASSERT(parse_version(code_ptr) == constants::version, wasm_parse_exception,
@@ -343,10 +344,12 @@ namespace eosio { namespace vm {
                default: EOS_VM_ASSERT(false, wasm_parse_exception, "error invalid section id");
             }
          }
+         elog("parse after loop ${t}", ("t", fc::time_point::now().time_since_epoch()));
          EOS_VM_ASSERT(_mod->code.size() == _mod->functions.size(), wasm_parse_exception, "code section must have the same size as the function section" );
 
          debug.set(std::move(imap));
          debug.relocate(_allocator.get_code_start());
+         elog("done parse ${t}", ("t", fc::time_point::now().time_since_epoch()));
       }
 
       inline uint32_t parse_magic(wasm_code_ptr& code) {

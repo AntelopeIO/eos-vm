@@ -101,7 +101,9 @@ namespace eosio { namespace vm {
       backend(wasm_code_ptr& ptr, size_t sz, wasm_allocator* alloc, const Options& options = Options{})
          : memory_alloc(alloc), ctx(parser_t{ mod.allocator, options }.parse_module2(ptr, sz, mod, debug), detail::get_max_call_depth(options)) {
          ctx.set_max_pages(detail::get_max_pages(options));
+         elog("construct ${t}", ("t", fc::time_point::now().time_since_epoch()));
          construct();
+         elog("after construct ${t}", ("t", fc::time_point::now().time_since_epoch()));
       }
 
       template <typename... Args>
