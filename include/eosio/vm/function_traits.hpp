@@ -72,12 +72,12 @@ namespace eosio { namespace vm {
       inline constexpr U&& make_dependent(U&& u) { return static_cast<U&&>(u); }
    }
 
-   template <typename F>
-   constexpr bool is_callable(F&& fn) { return EOS_VM_HAS_MEMBER(fn, operator()); }
-
    namespace detail {
       template <bool Decay, typename R, typename... Args>
       constexpr auto get_types(R(Args...)) -> std::tuple<R, freestanding,
+                                              std::tuple<std::conditional_t<Decay, std::decay_t<Args>, Args>...>>;
+      template <bool Decay, typename R, typename... Args>
+      constexpr auto get_types(R(Args...) noexcept) -> std::tuple<R, freestanding,
                                               std::tuple<std::conditional_t<Decay, std::decay_t<Args>, Args>...>>;
       template <bool Decay, typename R, typename Cls, typename... Args>
       constexpr auto get_types(R (Cls::*)(Args...)) -> std::tuple<R, Cls,
@@ -99,7 +99,7 @@ namespace eosio { namespace vm {
                                                                std::tuple<std::conditional_t<Decay, std::decay_t<Args>, Args>...>>;
       template <bool Decay, typename F>
       constexpr auto get_types(F&& fn) {
-         if constexpr (is_callable(fn))
+         if constexpr (!std::is_function_v<F>)
             return get_types<Decay>(&F::operator());
          else
             return get_types<Decay>(fn);
@@ -127,6 +127,8 @@ namespace eosio { namespace vm {
 
       template <std::size_t N, typename R, typename... Args>
       constexpr auto parameters_from_impl(R(Args...)) ->  pack_from_t<N, Args...>;
+      template <std::size_t N, typename R, typename... Args>
+      constexpr auto parameters_from_impl(R(Args...) noexcept) ->  pack_from_t<N, Args...>;
       template <std::size_t N, typename R, typename Cls, typename... Args>
       constexpr auto parameters_from_impl(R(Cls::*)(Args...)) ->  pack_from_t<N, Args...>;
       template <std::size_t N, typename R, typename Cls, typename... Args>
@@ -141,7 +143,7 @@ namespace eosio { namespace vm {
       constexpr auto parameters_from_impl(R(Cls::*)(Args...)const &&) ->  pack_from_t<N, Args...>;
       template <std::size_t N, typename F>
       constexpr auto parameters_from_impl(F&& fn) {
-         if constexpr (is_callable(fn))
+         if constexpr (!std::is_function_v<F>)
             return parameters_from_impl<N>(&F::operator());
          else
             return parameters_from_impl<N>(fn);
