@@ -74,34 +74,76 @@ namespace eosio { namespace vm {
       }
     public:
       backend(wasm_code&& code, host_t& host, wasm_allocator* alloc, const Options& options = Options{})
-         : memory_alloc(alloc), ctx(parser_t{ mod.allocator, options }.parse_module(code, mod, debug), detail::get_max_call_depth(options)) {
+         : memory_alloc(alloc), ctx(parse_module(code, options), detail::get_max_call_depth(options)) {
          ctx.set_max_pages(detail::get_max_pages(options));
          construct(&host);
       }
       backend(wasm_code&& code, wasm_allocator* alloc, const Options& options = Options{})
-         : memory_alloc(alloc), ctx(parser_t{ mod.allocator, options }.parse_module(code, mod, debug), detail::get_max_call_depth(options)) {
+         : memory_alloc(alloc), ctx(parse_module(code, options), detail::get_max_call_depth(options)) {
          ctx.set_max_pages(detail::get_max_pages(options));
          construct();
       }
       backend(wasm_code& code, host_t& host, wasm_allocator* alloc, const Options& options = Options{})
-         : memory_alloc(alloc), ctx(parser_t{ mod.allocator, options }.parse_module(code, mod, debug), detail::get_max_call_depth(options)) {
+         : memory_alloc(alloc), ctx(parse_module(code, options), detail::get_max_call_depth(options)) {
          ctx.set_max_pages(detail::get_max_pages(options));
          construct(&host);
       }
       backend(wasm_code& code, wasm_allocator* alloc, const Options& options = Options{})
-         : memory_alloc(alloc), ctx(parser_t{ mod.allocator, options }.parse_module(code, mod, debug), detail::get_max_call_depth(options)) {
+         : memory_alloc(alloc), ctx(parse_module(code, options), detail::get_max_call_depth(options)) {
          ctx.set_max_pages(detail::get_max_pages(options));
          construct();
       }
       backend(wasm_code_ptr& ptr, size_t sz, host_t& host, wasm_allocator* alloc, const Options& options = Options{})
-         : memory_alloc(alloc), ctx(parser_t{ mod.allocator, options }.parse_module2(ptr, sz, mod, debug), detail::get_max_call_depth(options)) {
+         : memory_alloc(alloc), ctx(parse_module2(ptr, sz, options, true), detail::get_max_call_depth(options)) { // single parsing. original behavior
          ctx.set_max_pages(detail::get_max_pages(options));
          construct(&host);
       }
-      backend(wasm_code_ptr& ptr, size_t sz, wasm_allocator* alloc, const Options& options = Options{})
-         : memory_alloc(alloc), ctx(parser_t{ mod.allocator, options }.parse_module2(ptr, sz, mod, debug), detail::get_max_call_depth(options)) {
+      // Leap:
+      //  * Contract validation only needs single parsing as the instantiated module is not cached.
+      //  * Contract execution requires two-passes parsing to prevent memory mappings exhaustion
+      backend(wasm_code_ptr& ptr, size_t sz, wasm_allocator* alloc, const Options& options = Options{}, bool single_parsing = true)
+         : memory_alloc(alloc), ctx(parse_module2(ptr, sz, options, single_parsing), detail::get_max_call_depth(options)) {
          ctx.set_max_pages(detail::get_max_pages(options));
          construct();
+      }
+
+      module& parse_module(wasm_code& code, const Options& options) {
+         mod.allocator.use_default_memory();
+         return parser_t{ mod.allocator, options }.parse_module(code, mod, debug);
+      }
+
+      module& parse_module2(wasm_code_ptr& ptr, size_t sz, const Options& options, bool single_parsing) {
+         if (single_parsing) {
+            mod.allocator.use_default_memory();
+            return parser_t{ mod.allocator, options }.parse_module2(ptr, sz, mod, debug);
+         }
+
+         // To prevent large number of memory mappings used, use two-passes parsing.
+         // The first pass finds max size of memory required for parsing;
+         // this memory is released after parsing.
+         // The second pass uses malloc with the required size of memory.
+         wasm_code_ptr orig_ptr = ptr;
+         size_t largest_size = 0;
+
+         // First pass: finds max size of memory required by parsing.
+         // Memory used by parsing will be freed when going out of the scope
+         {
+            module first_pass_module;
+            // For JIT, skips code generation as it is not needed and
+            // does not count the code memory size
+            detail::code_generate_mode code_gen_mode = Impl::is_jit ? detail::code_generate_mode::skip : detail::code_generate_mode::use_same_allocator;
+            first_pass_module.allocator.use_default_memory();
+            parser_t{ first_pass_module.allocator, options }.parse_module2(ptr, sz, first_pass_module, debug, code_gen_mode);
+            first_pass_module.finalize();
+            largest_size = first_pass_module.allocator.largest_used_size();
+         }
+
+         // Second pass: uses largest_size of memory for actual parsing
+         mod.allocator.use_fixed_memory(Impl::is_jit, largest_size);
+         // For JIT, uses a seperate allocator for code generation as mod's memory
+         // does not include memory for code
+         detail::code_generate_mode code_gen_mode = Impl::is_jit ? detail::code_generate_mode::use_seperate_allocator : detail::code_generate_mode::use_same_allocator;
+         return parser_t{ mod.allocator, options }.parse_module2(orig_ptr, sz, mod, debug, code_gen_mode);
       }
 
       template <typename... Args>

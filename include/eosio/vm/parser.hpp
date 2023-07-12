@@ -22,6 +22,12 @@ namespace eosio { namespace vm {
 
    namespace detail {
 
+   enum class code_generate_mode {
+      use_same_allocator = 0,     // uses the same allocator as in module for code generation
+      use_seperate_allocator = 1, // uses a different temporary allocator for code generation
+      skip = 2                    // skip code generation
+   };
+
    static constexpr unsigned get_size_for_type(uint8_t type) {
       switch(type) {
        case types::i32:
@@ -295,12 +301,12 @@ namespace eosio { namespace vm {
          return mod;
       }
 
-      inline module& parse_module2(wasm_code_ptr& code_ptr, size_t sz, module& mod, DebugInfo& debug) {
-         parse_module(code_ptr, sz, mod, debug);
+      inline module& parse_module2(wasm_code_ptr& code_ptr, size_t sz, module& mod, DebugInfo& debug, detail::code_generate_mode mode = detail::code_generate_mode::use_same_allocator) {
+         parse_module(code_ptr, sz, mod, debug, mode);
          return mod;
       }
 
-      void parse_module(wasm_code_ptr& code_ptr, size_t sz, module& mod, DebugInfo& debug) {
+      void parse_module(wasm_code_ptr& code_ptr, size_t sz, module& mod, DebugInfo& debug, detail::code_generate_mode mode = detail::code_generate_mode::use_same_allocator) {
          _mod = &mod;
          EOS_VM_ASSERT(parse_magic(code_ptr) == constants::magic, wasm_parse_exception, "magic number did not match");
          EOS_VM_ASSERT(parse_version(code_ptr) == constants::version, wasm_parse_exception,
@@ -338,7 +344,7 @@ namespace eosio { namespace vm {
                case section_id::element_section:
                   parse_section<section_id::element_section>(code_ptr, mod.elements);
                   break;
-               case section_id::code_section: parse_section<section_id::code_section>(code_ptr, mod.code); break;
+               case section_id::code_section: parse_section<section_id::code_section>(code_ptr, mod.code, mode); break;
                case section_id::data_section: parse_section<section_id::data_section>(code_ptr, mod.data); break;
                default: EOS_VM_ASSERT(false, wasm_parse_exception, "error invalid section id");
             }
@@ -1309,12 +1315,31 @@ namespace eosio { namespace vm {
       }
       template <uint8_t id>
       inline void parse_section(wasm_code_ptr&                                                                 code,
-                                vec<typename std::enable_if_t<id == section_id::code_section, function_body>>& elems) {
+                                vec<typename std::enable_if_t<id == section_id::code_section, function_body>>& elems, detail::code_generate_mode mode) {
          const void* code_start = code.raw() - code.offset();
          parse_section_impl(code, elems, detail::get_max_function_section_elements(_options),
                             [&](wasm_code_ptr& code, function_body& fb, std::size_t idx) { parse_function_body(code, fb, idx); });
          EOS_VM_ASSERT( elems.size() == _mod->functions.size(), wasm_parse_exception, "code section must have the same size as the function section" );
-         Writer code_writer(_allocator, code.bounds() - code.offset(), *_mod);
+
+         if (mode == detail::code_generate_mode::skip) {
+            return;
+         } else if (mode == detail::code_generate_mode::use_seperate_allocator) {
+            // Leap: in 2-pass parsing, save temporary JIT executible in a
+            // seperate allocator so the executible will not be part of
+            // instantiated module's allocator and won't be cached.
+            growable_allocator allocator;
+            allocator.use_default_memory();
+            write_code_out(allocator, code, code_start);
+            // pass the code base address and size to the main module's allocator
+            _mod->allocator.set_code_base_and_size(allocator._code_base, allocator._code_size);
+            allocator._code_base = nullptr; // make sure code_base won't be freed when going out of current scope by allocator's destructor
+         } else {
+            write_code_out(_allocator, code, code_start);
+         }
+      }
+
+      void write_code_out(growable_allocator& allocator, wasm_code_ptr& code, const void* code_start) {
+         Writer code_writer(allocator, code.bounds() - code.offset(), *_mod);
          imap.on_code_start(code_writer.get_base_addr(), code_start);
          for (size_t i = 0; i < _function_bodies.size(); i++) {
             function_body& fb = _mod->code[i];
@@ -1328,6 +1353,7 @@ namespace eosio { namespace vm {
          }
          imap.on_code_end(code_writer.get_addr(), code.raw());
       }
+
       template <uint8_t id>
       inline void parse_section(wasm_code_ptr&                                                                code,
                                 vec<typename std::enable_if_t<id == section_id::data_section, data_segment>>& elems) {
