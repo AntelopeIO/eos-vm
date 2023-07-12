@@ -10,7 +10,12 @@ namespace eosio { namespace vm {
       id_size      = sizeof(uint8_t),
       varuint32_size = 5,
       max_call_depth        = 250,
-      initial_stack_size    = 8*1024,
+      // initial_stack_size is used for reserving initial memory for operand stack.
+      // For JIT, operand stack is only used in calling host function calls, where
+      // number of elements required can never be big.
+      // For Interpreter, performance is not a concern.
+      // Intentionally set to a small number.
+      initial_stack_size    = 8,
       initial_module_size   = 1 * 1024 * 1024,
       max_memory            = 4ull << 31,
       max_useable_memory    = (1ull << 32), //4GiB

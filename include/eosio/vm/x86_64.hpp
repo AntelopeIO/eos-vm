@@ -34,9 +34,9 @@ namespace eosio { namespace vm {
    class machine_code_writer {
     public:
       machine_code_writer(growable_allocator& alloc, std::size_t source_bytes, module& mod) :
-         _mod(mod), _code_segment_base(alloc.start_code()) {
+         _mod(mod), _allocator(alloc), _code_segment_base(_allocator.start_code()) {
          const std::size_t code_size = 4 * 16; // 4 error handlers, each is 16 bytes.
-         _code_start = _mod.allocator.alloc<unsigned char>(code_size);
+         _code_start = _allocator.alloc<unsigned char>(code_size);
          _code_end = _code_start + code_size;
          code = _code_start;
 
@@ -51,7 +51,7 @@ namespace eosio { namespace vm {
          // emit host functions
          const uint32_t num_imported = mod.get_imported_functions_size();
          const std::size_t host_functions_size = (40 + 10 * Context::async_backtrace()) * num_imported;
-         _code_start = _mod.allocator.alloc<unsigned char>(host_functions_size);
+         _code_start = _allocator.alloc<unsigned char>(host_functions_size);
          _code_end = _code_start + host_functions_size;
          // code already set
          for(uint32_t i = 0; i < num_imported; ++i) {
@@ -67,7 +67,7 @@ namespace eosio { namespace vm {
             // can use random access
             _table_element_size = 17;
             const std::size_t table_size = _table_element_size*_mod.tables[0].table.size();
-            _code_start = _mod.allocator.alloc<unsigned char>(table_size);
+            _code_start = _allocator.alloc<unsigned char>(table_size);
             _code_end = _code_start + table_size;
             // code already set
             for(uint32_t i = 0; i < _mod.tables[0].table.size(); ++i) {
@@ -96,7 +96,7 @@ namespace eosio { namespace vm {
             assert(code == _code_end);
          }
       }
-      ~machine_code_writer() { _mod.allocator.end_code<true>(_code_segment_base); }
+      ~machine_code_writer() { _allocator.end_code<true>(_code_segment_base); }
 
       static constexpr std::size_t max_prologue_size = 21;
       static constexpr std::size_t max_epilogue_size = 10;
@@ -105,7 +105,7 @@ namespace eosio { namespace vm {
          // FIXME: This is not a tight upper bound
          const std::size_t instruction_size_ratio_upper_bound = use_softfloat?(Context::async_backtrace()?63:49):79;
          std::size_t code_size = max_prologue_size + _mod.code[funcnum].size * instruction_size_ratio_upper_bound + max_epilogue_size;
-         _code_start = _mod.allocator.alloc<unsigned char>(code_size);
+         _code_start = _allocator.alloc<unsigned char>(code_size);
          _code_end = _code_start + code_size;
          code = _code_start;
          start_function(code, funcnum + _mod.get_imported_functions_size());
@@ -2094,7 +2094,7 @@ namespace eosio { namespace vm {
 
       using fn_type = native_value(*)(void* context, void* memory);
       void finalize(function_body& body) {
-         _mod.allocator.reclaim(code, _code_end - code);
+         _allocator.reclaim(code, _code_end - code);
          body.jit_code_offset = _code_start - (unsigned char*)_code_segment_base;
       }
 
@@ -2128,6 +2128,7 @@ namespace eosio { namespace vm {
       }
 
       module& _mod;
+      growable_allocator& _allocator;
       void * _code_segment_base;
       const func_type* _ft;
       unsigned char * _code_start;
