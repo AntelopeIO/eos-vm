@@ -63,6 +63,17 @@ namespace eosio { namespace vm {
       size_t       size() const { return _index; }
       size_t       capacity() const { return _store.size(); }
 
+      // This is only applicable when underlying allocator is unmanaged_vector,
+      // which is std::vector
+      void         reset_capacity() {
+         if constexpr (std::is_same_v<Allocator, nullptr_t>) {
+            if (_store.capacity() > constants::initial_stack_size) {
+               _store.resize(constants::initial_stack_size);
+               _store.shrink_to_fit();
+            }
+         }
+      }
+
     private:
       using base_data_store_t = std::conditional_t<std::is_same_v<Allocator, std::nullptr_t>, unmanaged_vector<ElemT>, managed_vector<ElemT, Allocator>>;
 
