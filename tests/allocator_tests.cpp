@@ -97,3 +97,62 @@ TEST_CASE("Testing reclaim", "[growable_allocator]") {
    int * ptr2 = alloc.alloc<int>(10);
    CHECK(ptr2 == ptr1 + 2);
 }
+
+TEST_CASE("Testing use_default_memory", "[growable_allocator]") {
+   growable_allocator alloc(1024);
+   // use_default_memory cannot be called when memory is already allocated by constructor
+   CHECK_THROWS_AS(alloc.use_default_memory(), wasm_bad_alloc);
+
+   growable_allocator alloc1;
+   alloc1.use_default_memory();
+   // use_default_memory cannot be called multiple times
+   CHECK_THROWS_AS(alloc1.use_default_memory(), wasm_bad_alloc);
+
+   growable_allocator alloc3;
+   alloc3.use_default_memory();
+   // can allocate as much as researved memory
+   alloc3.alloc<char>(growable_allocator::max_memory_size);
+   // cannot allocate more than researved memory
+   CHECK_THROWS_AS(alloc3.alloc<char>(1), wasm_bad_alloc);
+}
+
+TEST_CASE("Testing use_fixed_memory", "[growable_allocator]") {
+   growable_allocator alloc(1024);
+   // use_fixed_memory cannot be called when memory is already allocated by constructor
+   CHECK_THROWS_AS(alloc.use_fixed_memory(false, 4096), wasm_bad_alloc);
+
+   growable_allocator alloc1;
+   alloc1.use_fixed_memory(true, 1024);
+   // use_fixed_memory cannot be called multiple times
+   CHECK_THROWS_AS(alloc1.use_fixed_memory(true, 1024), wasm_bad_alloc);
+
+   growable_allocator alloc2;
+   // fixed_memory size cannot be 0
+   CHECK_THROWS_AS(alloc2.use_fixed_memory(true, 0), wasm_bad_alloc);
+   // fixed_memory size cannot be too big
+   CHECK_THROWS_AS(alloc2.use_fixed_memory(true, growable_allocator::max_memory_size + 1), wasm_bad_alloc);
+   // fixed_memory size can be growable_allocator::max_memory_size
+   alloc2.use_fixed_memory(true, growable_allocator::max_memory_size);
+
+   growable_allocator alloc3;
+   // reserved 1024 bytes
+   alloc3.use_fixed_memory(true, 1024);
+   // can allocate less than researved memory
+   alloc3.alloc<char>(1000);
+   // can allocate equal to researved memory ( 1000+24 == 1024)
+   alloc3.alloc<char>(24);
+   // cannot allocate more than researved memory ( 1000+24+1 > 1024)
+   CHECK_THROWS_AS(alloc3.alloc<char>(1), wasm_bad_alloc);
+}
+
+TEST_CASE("Testing mixed use_fixed_memory and alloc2.use_default_memory", "[growable_allocator]") {
+   growable_allocator alloc1;
+   alloc1.use_default_memory();
+   // use_fixed_memory and use_fixed_memory cannot be mixed
+   CHECK_THROWS_AS(alloc1.use_fixed_memory(true, 1024), wasm_bad_alloc);
+
+   growable_allocator alloc2;
+   alloc2.use_fixed_memory(true, 1024);
+   // use_fixed_memory and use_default_memory cannot be mixed
+   CHECK_THROWS_AS(alloc2.use_default_memory(), wasm_bad_alloc);
+}
