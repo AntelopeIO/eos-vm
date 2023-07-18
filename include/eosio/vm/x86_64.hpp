@@ -445,43 +445,64 @@ namespace eosio { namespace vm {
       }
 
       void emit_get_global(uint32_t globalidx) {
-         auto icount = variable_size_instr(13, 14);
+         auto icount = variable_size_instr(24, 42); // emit_setup_backtrace can be 0 or 9, and emit_restore_backtrace 0 or 9, the total of the rest 24
          auto& gl = _mod.globals[globalidx];
-         void *ptr = &gl.current.value;
-         switch(gl.type.content_type) {
-          case types::i32:
-          case types::f32:
-            // movabsq $ptr, %rax
-            emit_bytes(0x48, 0xb8);
-            emit_operand_ptr(ptr);
-            // movl (%rax), eax
-            emit_bytes(0x8b, 0x00);
-            // push %rax
-            emit_bytes(0x50);
-            break;
-          case types::i64:
-          case types::f64:
-            // movabsq $ptr, %rax
-            emit_bytes(0x48, 0xb8);
-            emit_operand_ptr(ptr);
-            // movl (%rax), %rax
-            emit_bytes(0x48, 0x8b, 0x00);
-            // push %rax
-            emit_bytes(0x50);
-            break;
-         }
-      }
-      void emit_set_global(uint32_t globalidx) {
-         auto icount = fixed_size_instr(14);
-         auto& gl = _mod.globals[globalidx];
-         void *ptr = &gl.current.value;
-         // popq %rcx
-         emit_bytes(0x59);
-         // movabsq $ptr, %rax
+         emit_setup_backtrace();
+         // pushq %rdi -- save %rdi content onto stack
+         emit_bytes(0x57);
+         // pushq %rsi -- save %rsi content onto stack
+         emit_bytes(0x56);
+         // movq $globalidx, %rsi -- pass globalidx to %rsi, the second argument
+         emit_bytes(0x48, 0xc7, 0xc6);
+         emit_operand32(globalidx);
+         // movabsq $get_global, %rax
          emit_bytes(0x48, 0xb8);
-         emit_operand_ptr(ptr);
-         // movq %rcx, (%rax)
-         emit_bytes(0x48, 0x89, 0x08);
+         switch(gl.type.content_type) {
+            case types::i32: emit_operand_ptr(&get_global_i32); break;
+            case types::i64: emit_operand_ptr(&get_global_i64); break;
+            case types::f32: emit_operand_ptr(&get_global_f32); break;
+            case types::f64: emit_operand_ptr(&get_global_f64); break;
+         }
+         // call *%rax
+         emit_bytes(0xff, 0xd0);
+         // pop %rsi
+         emit_bytes(0x5e);
+         // pop %rdi
+         emit_bytes(0x5f);
+         emit_restore_backtrace();
+         // push %rax -- return result
+         emit_bytes(0x50);
+      }
+
+      void emit_set_global(uint32_t globalidx) {
+         auto icount = variable_size_instr(24, 42); // emit_setup_backtrace can be 0 or 9, and emit_restore_backtrace 0 or 9, the total of the rest 24
+         auto& gl = _mod.globals[globalidx];
+         // popq %rdx -- pass global value to %rdx, the third argument in set_global
+         emit_bytes(0x5a);
+         emit_setup_backtrace();
+         // pushq %rdi -- save %rdi content onto stack
+         emit_bytes(0x57);
+         // pushq %rsi -- save %rsi content onto stack
+         emit_bytes(0x56);
+         // movq $globalidx, %rsi -- pass globalidx to %rsi, the second argument
+         emit_bytes(0x48, 0xc7, 0xc6);
+         emit_operand32(globalidx);
+         // movabsq $set_global, %rax
+         emit_bytes(0x48, 0xb8);
+         //emit_operand_ptr(&set_global);
+         switch(gl.type.content_type) {
+            case types::i32: emit_operand_ptr(&set_global_i32); break;
+            case types::i64: emit_operand_ptr(&set_global_i64); break;
+            case types::f32: emit_operand_ptr(&set_global_f32); break;
+            case types::f64: emit_operand_ptr(&set_global_f64); break;
+         }
+         // call *%rax
+         emit_bytes(0xff, 0xd0);
+         // pop %rsi
+         emit_bytes(0x5e);
+         // pop %rdi
+         emit_bytes(0x5f);
+         emit_restore_backtrace();
       }
 
       void emit_i32_load(uint32_t /*alignment*/, uint32_t offset) {
@@ -2690,6 +2711,32 @@ namespace eosio { namespace vm {
 
       static int32_t grow_memory(Context* context /*rdi*/, int32_t pages) {
          return context->grow_linear_memory(pages);
+      }
+
+      static int32_t get_global_i32(Context* context /*rdi*/, uint32_t index /*rsi*/) {
+         return context->get_global_i32(index);
+      }
+      static int64_t get_global_i64(Context* context /*rdi*/, uint32_t index /*rsi*/) {
+         return context->get_global_i64(index);
+      }
+      static uint32_t get_global_f32(Context* context /*rdi*/, uint32_t index /*rsi*/) {
+         return context->get_global_f32(index);
+      }
+      static uint64_t get_global_f64(Context* context /*rdi*/, uint32_t index /*rsi*/) {
+         return context->get_global_f64(index);
+      }
+
+      static void set_global_i32(Context* context /*rdi*/, uint32_t index /*rsi*/, int32_t value /*rdx*/) {
+         context->set_global_i32(index, value);
+      }
+      static void set_global_i64(Context* context /*rdi*/, uint32_t index /*rsi*/, int64_t value /*rdx*/) {
+         context->set_global_i64(index, value);
+      }
+      static void set_global_f32(Context* context /*rdi*/, uint32_t index /*rsi*/, uint32_t value /*rdx*/) {
+         context->set_global_f32(index, value);
+      }
+      static void set_global_f64(Context* context /*rdi*/, uint32_t index /*rsi*/, uint64_t value /*rdx*/) {
+         context->set_global_f64(index, value);
       }
 
       static void on_unreachable() { vm::throw_<wasm_interpreter_exception>( "unreachable" ); }

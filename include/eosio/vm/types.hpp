@@ -74,7 +74,6 @@ namespace eosio { namespace vm {
    struct global_variable {
       global_type type;
       init_expr   init;
-      init_expr   current;
    };
 
    struct table_type {

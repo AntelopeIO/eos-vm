@@ -66,6 +66,7 @@ namespace eosio { namespace vm {
       void construct(host_t* host=nullptr) {
          mod.finalize();
          ctx.set_wasm_allocator(memory_alloc);
+         ctx.initialize_globals();
          if constexpr (!std::is_same_v<HostFunctions, std::nullptr_t>)
             HostFunctions::resolve(mod);
          // FIXME: should not hard code knowledge of null_backend here

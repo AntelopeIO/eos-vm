@@ -469,7 +469,6 @@ namespace eosio { namespace vm {
          if(gv.type.mutability)
             on_mutable_global(ct);
          parse_init_expr(code, gv.init, ct);
-         gv.current = gv.init;
       }
 
       void parse_memory_type(wasm_code_ptr& code, memory_type& mt) {
