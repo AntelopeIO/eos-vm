@@ -417,42 +417,34 @@ namespace eosio { namespace vm {
 #endif
 
       inline int32_t get_global_i32(uint32_t index) {
-         EOS_VM_ASSERT(index < _globals.size(), wasm_globals_oob_exception, "global index out of range in get_global_i32");
          return _globals[index].value.i32;
       }
 
       inline int64_t get_global_i64(uint32_t index) {
-         EOS_VM_ASSERT(index < _globals.size(), wasm_globals_oob_exception, "global index out of range in get_global_i64");
          return _globals[index].value.i64;
       }
 
       inline uint32_t get_global_f32(uint32_t index) {
-         EOS_VM_ASSERT(index < _globals.size(), wasm_globals_oob_exception, "global index out of range in get_global_f32");
          return _globals[index].value.f32;
       }
 
       inline uint64_t get_global_f64(uint32_t index) {
-         EOS_VM_ASSERT(index < _globals.size(), wasm_globals_oob_exception, "global index out of range in get_global_f64");
          return _globals[index].value.f64;
       }
 
       inline void set_global_i32(uint32_t index, int32_t value) {
-         EOS_VM_ASSERT(index < _globals.size(), wasm_globals_oob_exception, "global index out of range in set_global_i32");
          _globals[index].value.i32 = value;
       }
 
       inline void set_global_i64(uint32_t index, int64_t value) {
-         EOS_VM_ASSERT(index < _globals.size(), wasm_globals_oob_exception, "global index out of range in set_global_i64");
          _globals[index].value.i64 = value;
       }
 
       inline void set_global_f32(uint32_t index, uint32_t value) {
-         EOS_VM_ASSERT(index < _globals.size(), wasm_globals_oob_exception, "global index out of range in set_global_f32");
           _globals[index].value.f32 = value;
       }
 
       inline void set_global_f64(uint32_t index, uint64_t value) {
-         EOS_VM_ASSERT(index < _globals.size(), wasm_globals_oob_exception, "global index out of range in set_global_f64");
          _globals[index].value.f64 = value;
       }
 
