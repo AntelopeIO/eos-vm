@@ -640,6 +640,7 @@ namespace eosio { namespace vm {
 
       inline void set_global(uint32_t index, const operand_stack_elem& el) {
          EOS_VM_ASSERT(index < _mod.globals.size(), wasm_interpreter_exception, "global index out of range");
+         EOS_VM_ASSERT(index < _globals.size(), wasm_interpreter_exception, "index for _globals out of range");
          auto& gl = _mod.globals[index];
          EOS_VM_ASSERT(gl.type.mutability, wasm_interpreter_exception, "global is not mutable");
          visit(overloaded{ [&](const i32_const_t& i) {
