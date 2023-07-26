@@ -87,6 +87,14 @@ namespace eosio { namespace vm {
       Derived& derived() { return static_cast<Derived&>(*this); }
       execution_context_base(module& m) : _mod(m) {}
 
+      inline void initialize_globals() {
+         EOS_VM_ASSERT(_globals.empty(), wasm_memory_exception, "initialize_globals called on non-empty _globals");
+         _globals.reserve(_mod.globals.size());
+         for (uint32_t i = 0; i < _mod.globals.size(); i++) {
+            _globals.emplace_back(_mod.globals[i].init);
+         }
+      }
+
       inline int32_t grow_linear_memory(int32_t pages) {
          const int32_t sz = _wasm_alloc->get_current_page();
          if (pages < 0) {
@@ -145,9 +153,11 @@ namespace eosio { namespace vm {
          }
 
          // reset the mutable globals
+         EOS_VM_ASSERT(_globals.size() == _mod.globals.size(), wasm_memory_exception, "number of globals in execution_context not equall to the one in module");
          for (uint32_t i = 0; i < _mod.globals.size(); i++) {
-            if (_mod.globals[i].type.mutability)
-               _mod.globals[i].current = _mod.globals[i].init;
+            if (_mod.globals[i].type.mutability) {
+               _globals[i] = _mod.globals[i].init;
+            }
          }
       }
 
@@ -193,6 +203,7 @@ namespace eosio { namespace vm {
       detail::host_invoker_t<Host>    _rhf;
       std::error_code                 _error_code;
       operand_stack                   _os;
+      std::vector<init_expr>          _globals;
    };
 
    struct jit_visitor { template<typename T> jit_visitor(T&&) {} };
@@ -226,6 +237,7 @@ namespace eosio { namespace vm {
       using base_type::get_operand_stack;
       using base_type::linear_memory;
       using base_type::get_interface;
+      using base_type::_globals;
 
       jit_execution_context(module& m, std::uint32_t max_call_depth) : base_type(m), _remaining_call_depth(max_call_depth) {}
 
@@ -404,6 +416,38 @@ namespace eosio { namespace vm {
       static constexpr bool async_backtrace() { return EnableBacktrace; }
 #endif
 
+      inline int32_t get_global_i32(uint32_t index) {
+         return _globals[index].value.i32;
+      }
+
+      inline int64_t get_global_i64(uint32_t index) {
+         return _globals[index].value.i64;
+      }
+
+      inline uint32_t get_global_f32(uint32_t index) {
+         return _globals[index].value.f32;
+      }
+
+      inline uint64_t get_global_f64(uint32_t index) {
+         return _globals[index].value.f64;
+      }
+
+      inline void set_global_i32(uint32_t index, int32_t value) {
+         _globals[index].value.i32 = value;
+      }
+
+      inline void set_global_i64(uint32_t index, int64_t value) {
+         _globals[index].value.i64 = value;
+      }
+
+      inline void set_global_f32(uint32_t index, uint32_t value) {
+          _globals[index].value.f32 = value;
+      }
+
+      inline void set_global_f64(uint32_t index, uint64_t value) {
+         _globals[index].value.f64 = value;
+      }
+
    protected:
 
       template<typename T>
@@ -501,6 +545,7 @@ namespace eosio { namespace vm {
       using base_type::get_operand_stack;
       using base_type::linear_memory;
       using base_type::get_interface;
+      using base_type::_globals;
 
       execution_context(module& m, uint32_t max_call_depth)
        : base_type(m), _base_allocator{max_call_depth*sizeof(activation_frame)},
@@ -585,37 +630,38 @@ namespace eosio { namespace vm {
          EOS_VM_ASSERT(index < _mod.globals.size(), wasm_interpreter_exception, "global index out of range");
          const auto& gl = _mod.globals[index];
          switch (gl.type.content_type) {
-            case types::i32: return i32_const_t{ *(uint32_t*)&gl.current.value.i32 };
-            case types::i64: return i64_const_t{ *(uint64_t*)&gl.current.value.i64 };
-            case types::f32: return f32_const_t{ gl.current.value.f32 };
-            case types::f64: return f64_const_t{ gl.current.value.f64 };
+            case types::i32: return i32_const_t{ _globals[index].value.i32 };
+            case types::i64: return i64_const_t{ _globals[index].value.i64 };
+            case types::f32: return f32_const_t{ _globals[index].value.f32 };
+            case types::f64: return f64_const_t{ _globals[index].value.f64 };
             default: throw wasm_interpreter_exception{ "invalid global type" };
          }
       }
 
       inline void set_global(uint32_t index, const operand_stack_elem& el) {
          EOS_VM_ASSERT(index < _mod.globals.size(), wasm_interpreter_exception, "global index out of range");
+         EOS_VM_ASSERT(index < _globals.size(), wasm_interpreter_exception, "index for _globals out of range");
          auto& gl = _mod.globals[index];
          EOS_VM_ASSERT(gl.type.mutability, wasm_interpreter_exception, "global is not mutable");
          visit(overloaded{ [&](const i32_const_t& i) {
                                   EOS_VM_ASSERT(gl.type.content_type == types::i32, wasm_interpreter_exception,
                                                 "expected i32 global type");
-                                  gl.current.value.i32 = i.data.ui;
+                                  _globals[index].value.i32 = i.data.ui;
                                },
                                 [&](const i64_const_t& i) {
                                    EOS_VM_ASSERT(gl.type.content_type == types::i64, wasm_interpreter_exception,
                                                  "expected i64 global type");
-                                   gl.current.value.i64 = i.data.ui;
+                                   _globals[index].value.i64 = i.data.ui;
                                 },
                                 [&](const f32_const_t& f) {
                                    EOS_VM_ASSERT(gl.type.content_type == types::f32, wasm_interpreter_exception,
                                                  "expected f32 global type");
-                                   gl.current.value.f32 = f.data.ui;
+                                   _globals[index].value.f32 = f.data.ui;
                                 },
                                 [&](const f64_const_t& f) {
                                    EOS_VM_ASSERT(gl.type.content_type == types::f64, wasm_interpreter_exception,
                                                  "expected f64 global type");
-                                   gl.current.value.f64 = f.data.ui;
+                                   _globals[index].value.f64 = f.data.ui;
                                 },
                                 [](auto) { throw wasm_interpreter_exception{ "invalid global type" }; } },
                     el);
