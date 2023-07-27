@@ -80,15 +80,15 @@ namespace eosio { namespace vm {
       using host_invoker_t = typename host_invoker<HF>::type;
    }
 
-   template<typename Derived, typename Host>
+   template<typename Derived, typename Host, bool IsJit>
    class execution_context_base {
       using host_type  = detail::host_type_t<Host>;
     public:
       Derived& derived() { return static_cast<Derived&>(*this); }
-      execution_context_base(module& m, bool is_jit) : _mod(m), _is_jit(is_jit)  {}
+      execution_context_base(module& m) : _mod(m) {}
 
       inline void initialize_globals() {
-         if (_is_jit) {
+         if constexpr (IsJit) {
             return initialize_globals_impl(*_mod.jit_mod);
          }
          else {
@@ -106,7 +106,7 @@ namespace eosio { namespace vm {
       }
 
       inline int32_t grow_linear_memory(int32_t pages) {
-         if (_is_jit) {
+         if constexpr (IsJit) {
             return grow_linear_memory_impl(*_mod.jit_mod, pages);
          } else {
             return grow_linear_memory_impl(_mod, pages);
@@ -224,16 +224,15 @@ namespace eosio { namespace vm {
       std::error_code                 _error_code;
       operand_stack                   _os;
       std::vector<init_expr>          _globals;
-      bool                            _is_jit = false;
    };
 
    struct jit_visitor { template<typename T> jit_visitor(T&&) {} };
 
    template<typename Host>
-   class null_execution_context : public execution_context_base<null_execution_context<Host>, Host> {
-      using base_type = execution_context_base<null_execution_context<Host>, Host>;
+   class null_execution_context : public execution_context_base<null_execution_context<Host>, Host, false> {
+      using base_type = execution_context_base<null_execution_context<Host>, Host, false>;
    public:
-      null_execution_context(module& m, std::uint32_t max_call_depth) : base_type(m, false) {}
+      null_execution_context(module& m, std::uint32_t max_call_depth) : base_type(m) {}
    };
 
    template<bool EnableBacktrace>
@@ -245,8 +244,8 @@ namespace eosio { namespace vm {
    };
 
    template<typename Host, bool EnableBacktrace = false>
-   class jit_execution_context : public frame_info_holder<EnableBacktrace>, public execution_context_base<jit_execution_context<Host, EnableBacktrace>, Host> {
-      using base_type = execution_context_base<jit_execution_context<Host, EnableBacktrace>, Host>;
+   class jit_execution_context : public frame_info_holder<EnableBacktrace>, public execution_context_base<jit_execution_context<Host, EnableBacktrace>, Host, true> {
+      using base_type = execution_context_base<jit_execution_context<Host, EnableBacktrace>, Host, true>;
       using host_type  = detail::host_type_t<Host>;
    public:
       using base_type::execute;
@@ -260,7 +259,7 @@ namespace eosio { namespace vm {
       using base_type::get_interface;
       using base_type::_globals;
 
-      jit_execution_context(module& m, std::uint32_t max_call_depth) : base_type(m, true), _remaining_call_depth(max_call_depth) {}
+      jit_execution_context(module& m, std::uint32_t max_call_depth) : base_type(m), _remaining_call_depth(max_call_depth) {}
 
       void set_max_call_depth(std::uint32_t max_call_depth) {
          _remaining_call_depth = max_call_depth;
@@ -555,8 +554,8 @@ namespace eosio { namespace vm {
    };
 
    template <typename Host>
-   class execution_context : public execution_context_base<execution_context<Host>, Host> {
-      using base_type = execution_context_base<execution_context<Host>, Host>;
+   class execution_context : public execution_context_base<execution_context<Host>, Host, false> {
+      using base_type = execution_context_base<execution_context<Host>, Host, false>;
       using host_type  = detail::host_type_t<Host>;
     public:
       using base_type::_mod;
@@ -569,7 +568,7 @@ namespace eosio { namespace vm {
       using base_type::_globals;
 
       execution_context(module& m, uint32_t max_call_depth)
-       : base_type(m, false), _base_allocator{max_call_depth*sizeof(activation_frame)},
+       : base_type(m), _base_allocator{max_call_depth*sizeof(activation_frame)},
          _as{max_call_depth, _base_allocator}, _halt(exit_t{}) {}
 
       void set_max_call_depth(uint32_t max_call_depth) {

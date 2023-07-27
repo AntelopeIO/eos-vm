@@ -68,8 +68,11 @@ namespace eosio { namespace vm {
          ctx.set_wasm_allocator(memory_alloc);
          // Now data required by JIT is finalized; create JIT module
          // such that memory used in parsing can be released.
-         if (Impl::is_jit) {
+         if constexpr (Impl::is_jit) {
             mod.make_jit_module();
+
+            // Important. Release the memory used by parsing.
+            mod.allocator.release_base_memory();
          }
          ctx.initialize_globals();
          if constexpr (!std::is_same_v<HostFunctions, std::nullptr_t>)

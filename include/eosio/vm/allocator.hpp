@@ -303,7 +303,7 @@ namespace eosio { namespace vm {
          EOS_VM_ASSERT(_base == nullptr, wasm_bad_alloc, "Fixed memory already allocated");
 
          _base = (char*)mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-         EOS_VM_ASSERT(_base != MAP_FAILED, wasm_bad_alloc, "mmap in use_fixed_memoryfailed.");
+         EOS_VM_ASSERT(_base != MAP_FAILED, wasm_bad_alloc, "mmap in use_fixed_memory failed.");
          _capacity = size;
       }
 

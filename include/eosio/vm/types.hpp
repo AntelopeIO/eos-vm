@@ -309,9 +309,6 @@ namespace eosio { namespace vm {
          if (import_functions.size() > 0) {
             jit_mod->import_functions.assign(import_functions.data(), import_functions.data() + import_functions.size());
          }
-
-         // Important. Release the memory used during parsing.
-         allocator.release_base_memory();
       }
 
       void finalize() {
