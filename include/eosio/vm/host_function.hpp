@@ -361,9 +361,10 @@ namespace eosio { namespace vm {
       std::vector<value_type> ret;
    };
 
-   inline bool operator==(const host_function& lhs, const func_type& rhs) {
+   template<typename Func_type>
+   inline bool operator==(const host_function& lhs, const Func_type& rhs) {
       return lhs.params.size() == rhs.param_types.size() &&
-         std::equal(lhs.params.begin(), lhs.params.end(), rhs.param_types.raw()) &&
+         std::equal(lhs.params.begin(), lhs.params.end(), rhs.param_types.data()) &&
          lhs.ret.size() == rhs.return_count &&
          (lhs.ret.size() == 0 || lhs.ret[0] == rhs.return_type);
    }
@@ -452,20 +453,27 @@ namespace eosio { namespace vm {
          mappings::get().template add_mapping<Func, res, args, preconditions>(mod, name);
       }
 
+      static void resolve(module& mod) {
+         if (mod.jit_mod != nullptr) {
+            resolve_impl(*mod.jit_mod);
+         } else {
+            resolve_impl(mod);
+         }
+      }
+
       template <typename Module>
-      static void resolve(Module& mod) {
+      static void resolve_impl(Module& mod) {
          auto& imports          = mod.import_functions;
          auto& current_mappings = mappings::get();
          for (std::size_t i = 0; i < mod.imports.size(); i++) {
             std::string mod_name =
-                  std::string((char*)mod.imports[i].module_str.raw(), mod.imports[i].module_str.size());
-            std::string fn_name = std::string((char*)mod.imports[i].field_str.raw(), mod.imports[i].field_str.size());
+                  std::string((char*)mod.imports[i].module_str.data(), mod.imports[i].module_str.size());
+            std::string fn_name = std::string((char*)mod.imports[i].field_str.data(), mod.imports[i].field_str.size());
             EOS_VM_ASSERT(current_mappings.named_mapping.count({ mod_name, fn_name }), wasm_link_exception,
                           std::string("no mapping for imported function ") + fn_name);
             imports[i] = current_mappings.named_mapping[{ mod_name, fn_name }];
-            const import_entry& entry = mod.imports[i];
-            EOS_VM_ASSERT(entry.kind == Function, wasm_link_exception, std::string("importing non-function ") + fn_name);
-            EOS_VM_ASSERT(current_mappings.host_functions[imports[i]] == mod.types[entry.type.func_t], wasm_link_exception, std::string("wrong type for imported function ") + fn_name);
+            EOS_VM_ASSERT(mod.imports[i].kind == Function, wasm_link_exception, std::string("importing non-function ") + fn_name);
+            EOS_VM_ASSERT(current_mappings.host_functions[imports[i]] == mod.types[mod.imports[i].type.func_t], wasm_link_exception, std::string("wrong type for imported function ") + fn_name);
          }
       }
 

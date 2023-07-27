@@ -189,11 +189,140 @@ namespace eosio { namespace vm {
       // to memory with static storage duration.
       const char *             error            = nullptr;
 
+      // Stores data needed by JIT execution, in memory managed by standard
+      // C++ vectors, not growable_allocator used by guarded_vector,
+      // such that growable_allocator can be released after parsing.
+      // This is to make it possible parsing WASM only once for JIT.
+      struct jit_mod_t {
+         struct jit_func_type {
+            value_type                 form;
+            std::vector<value_type>    param_types;
+            uint8_t                    return_count;
+            value_type                 return_type;
+         };
+         struct jit_import_type {
+            uint32_t    func_t;
+         };
+         struct jit_import_entry {
+            std::vector<uint8_t> module_str;
+            std::vector<uint8_t> field_str;
+            external_kind        kind;
+            jit_import_type      type;
+         };
+         struct jit_export_entry {
+            std::vector<uint8_t> field_str;
+            external_kind        kind;
+            uint32_t             index;
+         };
+         struct jit_data_segment {
+            uint32_t              index;
+            init_expr             offset;
+            std::vector<uint8_t>  data;
+         };
+
+         std::vector<jit_func_type>        types;
+         std::vector<jit_import_entry>     imports;
+         std::vector<uint32_t>             functions;
+         std::vector<memory_type>          memories;
+         std::vector<global_variable>      globals;
+         std::vector<jit_export_entry>     exports;
+         std::vector<size_t>               code_offset;
+         std::vector<jit_data_segment>     data;
+         std::vector<uint32_t>             import_functions;
+
+         auto& get_function_type(uint32_t index) const {
+            if (index < get_imported_functions_size())
+               return types[imports[index].type.func_t];
+            return types[functions[index - get_imported_functions_size()]];
+         }
+         uint32_t get_imported_functions_size() const {
+            return get_imported_functions_size_impl(imports);
+         }
+      };
+
+      // The memory storing module data for JIT
+      std::unique_ptr<jit_mod_t> jit_mod;
+
+      // Constructs data for JIT execution.
+      // Called from backend::construct() after parsing is finalized.
+      void make_jit_module() {
+         jit_mod = std::make_unique<jit_mod_t>();
+
+         for (uint32_t i = 0; i < types.size(); ++i) {
+            const auto& type = types[i];
+            jit_mod_t::jit_func_type func_type {
+               type.form,
+               {type.param_types.data(), type.param_types.data() + type.param_types.size()},
+               type.return_count,
+               type.return_type
+            };
+            jit_mod->types.emplace_back(func_type);
+         }
+
+         for (uint32_t i = 0; i < imports.size(); ++i) {
+            const auto& entry = imports[i];
+            jit_mod_t::jit_import_entry import_entry {
+               {entry.module_str.data(), entry.module_str.data() + entry.module_str.size()},
+               {entry.field_str.data(), entry.field_str.data() + entry.field_str.size()},
+               entry.kind,
+               {entry.type.func_t}
+            };
+            jit_mod->imports.emplace_back(import_entry);
+         }
+
+         if (memories.size() > 0) {
+            jit_mod->memories.emplace_back(memories[0]); // memories has one element only
+         }
+
+         if (functions.size() > 0) {
+            jit_mod->functions.assign(functions.data(), functions.data() + functions.size());
+         }
+
+         if (globals.size() > 0) {
+            jit_mod->globals.assign(globals.raw(), globals.raw() + globals.size());
+         }
+
+         for (uint32_t i = 0; i < exports.size(); ++i) {
+            const auto& entry = exports[i];
+            jit_mod_t::jit_export_entry export_entry {
+               {entry.field_str.data(), entry.field_str.data() + entry.field_str.size()},
+               entry.kind,
+               entry.index
+            };
+            jit_mod->exports.emplace_back(export_entry);
+         }
+
+         for (uint32_t i = 0; i < code.size(); ++i) {
+            jit_mod->code_offset.emplace_back(code[i].jit_code_offset);
+         }
+
+         for (uint32_t i = 0; i < data.size(); ++i) {
+            const auto& data_seg = data[i];
+            jit_mod_t::jit_data_segment jit_mod_seg{
+               data_seg.index,
+               data_seg.offset,
+               {data_seg.data.data(), data_seg.data.data() + data_seg.data.size()}
+            };
+            jit_mod->data.emplace_back(jit_mod_seg);
+         }
+
+         if (import_functions.size() > 0) {
+            jit_mod->import_functions.assign(import_functions.data(), import_functions.data() + import_functions.size());
+         }
+
+         // Important. Release the memory used during parsing.
+         allocator.release_base_memory();
+      }
+
       void finalize() {
          import_functions.resize(get_imported_functions_size());
          allocator.finalize();
       }
       uint32_t get_imported_functions_size() const {
+         return get_imported_functions_size_impl(imports);
+      }
+      template<typename Imports>
+      static uint32_t get_imported_functions_size_impl(const Imports& imports) {
          uint32_t number_of_imports = 0;
          for (uint32_t i = 0; i < imports.size(); i++) {
             if (imports[i].kind == external_kind::Function)
@@ -223,11 +352,18 @@ namespace eosio { namespace vm {
          return types[functions[index - get_imported_functions_size()]];
       }
 
+      // When jit_mod is available, this function executes on jit_mod,
+      // otherwise on module itself.
       uint32_t get_exported_function(const std::string_view str) {
+         return (jit_mod) ? get_exported_function_impl(jit_mod->exports, str) : get_exported_function_impl(exports, str);
+      }
+
+      template<typename Exports>
+      static uint32_t get_exported_function_impl(const Exports& exports, const std::string_view str) {
          uint32_t index = std::numeric_limits<uint32_t>::max();
          for (uint32_t i = 0; i < exports.size(); i++) {
             if (exports[i].kind == external_kind::Function && exports[i].field_str.size() == str.size() &&
-                memcmp((const char*)str.data(), (const char*)exports[i].field_str.raw(), exports[i].field_str.size()) ==
+                memcmp((const char*)str.data(), (const char*)exports[i].field_str.data(), exports[i].field_str.size()) ==
                       0) {
                index = exports[i].index;
                break;

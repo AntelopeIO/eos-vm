@@ -66,6 +66,11 @@ namespace eosio { namespace vm {
       void construct(host_t* host=nullptr) {
          mod.finalize();
          ctx.set_wasm_allocator(memory_alloc);
+         // Now data required by JIT is finalized; create JIT module
+         // such that memory used in parsing can be released.
+         if (Impl::is_jit) {
+            mod.make_jit_module();
+         }
          ctx.initialize_globals();
          if constexpr (!std::is_same_v<HostFunctions, std::nullptr_t>)
             HostFunctions::resolve(mod);
@@ -101,7 +106,8 @@ namespace eosio { namespace vm {
       }
       // Leap:
       //  * Contract validation only needs single parsing as the instantiated module is not cached.
-      //  * Contract execution requires two-passes parsing to prevent memory mappings exhaustion
+      //  * JIT execution needs single parsing only.
+      //  * Interpreter execution requires two-passes parsing to prevent memory mappings exhaustion
       backend(wasm_code_ptr& ptr, size_t sz, wasm_allocator* alloc, const Options& options = Options{}, bool single_parsing = true)
          : memory_alloc(alloc), ctx(parse_module2(ptr, sz, options, single_parsing), detail::get_max_call_depth(options)) {
          ctx.set_max_pages(detail::get_max_pages(options));
@@ -117,34 +123,26 @@ namespace eosio { namespace vm {
          if (single_parsing) {
             mod.allocator.use_default_memory();
             return parser_t{ mod.allocator, options }.parse_module2(ptr, sz, mod, debug);
+         } else {
+            // To prevent large number of memory mappings used, two-passes of
+            // parsing are performed.
+            wasm_code_ptr orig_ptr = ptr;
+            size_t largest_size = 0;
+
+            // First pass: finds max size of memory required by parsing.
+            {
+               // Memory used by this pass is freed when going out of the scope
+               module first_pass_module;
+               first_pass_module.allocator.use_default_memory();
+               parser_t{ first_pass_module.allocator, options }.parse_module2(ptr, sz, first_pass_module, debug);
+               first_pass_module.finalize();
+               largest_size = first_pass_module.allocator.largest_used_size();
+            }
+
+            // Second pass: uses actual required memory for final parsing
+            mod.allocator.use_fixed_memory(largest_size);
+            return parser_t{ mod.allocator, options }.parse_module2(orig_ptr, sz, mod, debug);
          }
-
-         // To prevent large number of memory mappings used, use two-passes parsing.
-         // The first pass finds max size of memory required for parsing;
-         // this memory is released after parsing.
-         // The second pass uses malloc with the required size of memory.
-         wasm_code_ptr orig_ptr = ptr;
-         size_t largest_size = 0;
-
-         // First pass: finds max size of memory required by parsing.
-         // Memory used by parsing will be freed when going out of the scope
-         {
-            module first_pass_module;
-            // For JIT, skips code generation as it is not needed and
-            // does not count the code memory size
-            detail::code_generate_mode code_gen_mode = Impl::is_jit ? detail::code_generate_mode::skip : detail::code_generate_mode::use_same_allocator;
-            first_pass_module.allocator.use_default_memory();
-            parser_t{ first_pass_module.allocator, options }.parse_module2(ptr, sz, first_pass_module, debug, code_gen_mode);
-            first_pass_module.finalize();
-            largest_size = first_pass_module.allocator.largest_used_size();
-         }
-
-         // Second pass: uses largest_size of memory for actual parsing
-         mod.allocator.use_fixed_memory(Impl::is_jit, largest_size);
-         // For JIT, uses a seperate allocator for code generation as mod's memory
-         // does not include memory for code
-         detail::code_generate_mode code_gen_mode = Impl::is_jit ? detail::code_generate_mode::use_seperate_allocator : detail::code_generate_mode::use_same_allocator;
-         return parser_t{ mod.allocator, options }.parse_module2(orig_ptr, sz, mod, debug, code_gen_mode);
       }
 
       template <typename... Args>
