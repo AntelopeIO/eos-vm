@@ -337,7 +337,7 @@ namespace eosio { namespace vm {
                if(stack) {
                   stack = static_cast<char*>(stack) - 24;
                }
-               auto fn = reinterpret_cast<native_value (*)(void*, void*)>(_mod.jit_mod->code_offset[func_index - _mod.jit_mod->get_imported_functions_size()] + _mod.allocator._code_base);
+               auto fn = reinterpret_cast<native_value (*)(void*, void*)>(_mod.jit_mod->jit_code_offset[func_index - _mod.jit_mod->get_imported_functions_size()] + _mod.allocator._code_base);
 
                if constexpr(EnableBacktrace) {
                   sigset_t block_mask;

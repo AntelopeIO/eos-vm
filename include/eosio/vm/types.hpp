@@ -192,6 +192,8 @@ namespace eosio { namespace vm {
       // Stores data needed by JIT execution, in memory managed by standard
       // C++ vectors, not growable_allocator used by guarded_vector,
       // such that growable_allocator can be released after parsing.
+      // All growable_allocators (including recursively) used in module
+      // are redefined by std::vector in jit_mod_t.
       // This is to make it possible parsing WASM only once for JIT.
       struct jit_mod_t {
          struct jit_func_type {
@@ -223,12 +225,15 @@ namespace eosio { namespace vm {
          std::vector<jit_func_type>        types;
          std::vector<jit_import_entry>     imports;
          std::vector<uint32_t>             functions;
+         // tables not needed during JIT execution
          std::vector<memory_type>          memories;
          std::vector<global_variable>      globals;
          std::vector<jit_export_entry>     exports;
-         std::vector<size_t>               code_offset;
+         // elements not needed during JIT execution
+         std::vector<size_t>               jit_code_offset;
          std::vector<jit_data_segment>     data;
          std::vector<uint32_t>             import_functions;
+         // type_aliases and fast_functions not needed during JIT execution
 
          auto& get_function_type(uint32_t index) const {
             if (index < get_imported_functions_size())
@@ -248,26 +253,30 @@ namespace eosio { namespace vm {
       void make_jit_module() {
          jit_mod = std::make_unique<jit_mod_t>();
 
-         for (uint32_t i = 0; i < types.size(); ++i) {
-            const auto& type = types[i];
-            jit_mod_t::jit_func_type func_type {
-               type.form,
-               {type.param_types.data(), type.param_types.data() + type.param_types.size()},
-               type.return_count,
-               type.return_type
-            };
-            jit_mod->types.emplace_back(func_type);
+         if (auto types_size = types.size(); types_size > 0) {
+            jit_mod->types.reserve(types_size);
+            for (uint32_t i = 0; i < types_size; ++i) {
+               const auto& type = types[i];
+               jit_mod->types.emplace_back(jit_mod_t::jit_func_type{
+                  type.form,
+                  {type.param_types.data(), type.param_types.data() + type.param_types.size()},
+                  type.return_count,
+                  type.return_type
+               });
+            }
          }
 
-         for (uint32_t i = 0; i < imports.size(); ++i) {
-            const auto& entry = imports[i];
-            jit_mod_t::jit_import_entry import_entry {
-               {entry.module_str.data(), entry.module_str.data() + entry.module_str.size()},
-               {entry.field_str.data(), entry.field_str.data() + entry.field_str.size()},
-               entry.kind,
-               {entry.type.func_t}
-            };
-            jit_mod->imports.emplace_back(import_entry);
+         if (auto imports_size = imports.size(); imports_size > 0) {
+            jit_mod->imports.reserve(imports_size);
+            for (uint32_t i = 0; i < imports_size; ++i) {
+               const auto& entry = imports[i];
+               jit_mod->imports.emplace_back(jit_mod_t::jit_import_entry{
+                  {entry.module_str.data(), entry.module_str.data() + entry.module_str.size()},
+                  {entry.field_str.data(), entry.field_str.data() + entry.field_str.size()},
+                  entry.kind,
+                  {entry.type.func_t}
+               });
+            }
          }
 
          if (memories.size() > 0) {
@@ -282,28 +291,35 @@ namespace eosio { namespace vm {
             jit_mod->globals.assign(globals.raw(), globals.raw() + globals.size());
          }
 
-         for (uint32_t i = 0; i < exports.size(); ++i) {
-            const auto& entry = exports[i];
-            jit_mod_t::jit_export_entry export_entry {
-               {entry.field_str.data(), entry.field_str.data() + entry.field_str.size()},
-               entry.kind,
-               entry.index
-            };
-            jit_mod->exports.emplace_back(export_entry);
+         if (auto exports_size = exports.size(); exports_size > 0) {
+            jit_mod->exports.reserve(exports_size);
+            for (uint32_t i = 0; i < exports_size; ++i) {
+               const auto& entry = exports[i];
+               jit_mod->exports.emplace_back(jit_mod_t::jit_export_entry{
+                  {entry.field_str.data(), entry.field_str.data() + entry.field_str.size()},
+                  entry.kind,
+                  entry.index
+               });
+            }
          }
 
-         for (uint32_t i = 0; i < code.size(); ++i) {
-            jit_mod->code_offset.emplace_back(code[i].jit_code_offset);
+         if (auto code_size = code.size(); code_size > 0) {
+            jit_mod->jit_code_offset.reserve(code_size);
+            for (uint32_t i = 0; i < code_size; ++i) {
+               jit_mod->jit_code_offset.emplace_back(code[i].jit_code_offset);
+            }
          }
 
-         for (uint32_t i = 0; i < data.size(); ++i) {
-            const auto& data_seg = data[i];
-            jit_mod_t::jit_data_segment jit_mod_seg{
-               data_seg.index,
-               data_seg.offset,
-               {data_seg.data.data(), data_seg.data.data() + data_seg.data.size()}
-            };
-            jit_mod->data.emplace_back(jit_mod_seg);
+         if (auto data_size = data.size(); data_size > 0) {
+            jit_mod->data.reserve(data_size);
+            for (uint32_t i = 0; i < data_size; ++i) {
+               const auto& data_seg = data[i];
+               jit_mod->data.emplace_back(jit_mod_t::jit_data_segment{
+                  data_seg.index,
+                  data_seg.offset,
+                  {data_seg.data.data(), data_seg.data.data() + data_seg.data.size()}
+               });
+            }
          }
 
          if (import_functions.size() > 0) {
