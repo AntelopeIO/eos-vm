@@ -368,9 +368,6 @@ namespace eosio { namespace vm {
          lhs.ret.size() == rhs.return_count &&
          (lhs.ret.size() == 0 || lhs.ret[0] == rhs.return_type);
    }
-   inline bool operator==(const func_type& lhs, const host_function& rhs) {
-      return rhs == lhs;
-   }
 
    template<typename TC, typename Args, std::size_t... Is>
    void get_args(value_type*& out, std::index_sequence<Is...>) {
