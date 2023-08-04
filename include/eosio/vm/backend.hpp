@@ -65,7 +65,9 @@ namespace eosio { namespace vm {
       using parser_t   = typename Impl::template parser<HostFunctions, Options, DebugInfo>;
       void construct(host_t* host=nullptr) {
          mod.finalize();
-         ctx.set_wasm_allocator(memory_alloc);
+         if (owns_exec_ctx) {
+            ctx->set_wasm_allocator(memory_alloc);
+         }
          // Now data required by JIT is finalized; create JIT module
          // such that memory used in parsing can be released.
          if constexpr (Impl::is_jit) {
@@ -74,47 +76,62 @@ namespace eosio { namespace vm {
             // Important. Release the memory used by parsing.
             mod.allocator.release_base_memory();
          }
-         ctx.initialize_globals();
+         if (owns_exec_ctx) {
+            ctx->initialize_globals();
+         }
          if constexpr (!std::is_same_v<HostFunctions, std::nullptr_t>)
             HostFunctions::resolve(mod);
          // FIXME: should not hard code knowledge of null_backend here
-         if constexpr (!std::is_same_v<Impl, null_backend>)
-            initialize(host);
+         if (owns_exec_ctx) {
+            if constexpr (!std::is_same_v<Impl, null_backend>)
+               initialize(host);
+         }
       }
     public:
       backend(wasm_code&& code, host_t& host, wasm_allocator* alloc, const Options& options = Options{})
-         : memory_alloc(alloc), ctx(parse_module(code, options), detail::get_max_call_depth(options)) {
-         ctx.set_max_pages(detail::get_max_pages(options));
+         : memory_alloc(alloc), ctx(new context_t{parse_module(code, options), detail::get_max_call_depth(options)}) {
+         ctx->set_max_pages(detail::get_max_pages(options));
          construct(&host);
       }
       backend(wasm_code&& code, wasm_allocator* alloc, const Options& options = Options{})
-         : memory_alloc(alloc), ctx(parse_module(code, options), detail::get_max_call_depth(options)) {
-         ctx.set_max_pages(detail::get_max_pages(options));
+         : memory_alloc(alloc), ctx(new context_t{parse_module(code, options), detail::get_max_call_depth(options)}) {
+         ctx->set_max_pages(detail::get_max_pages(options));
          construct();
       }
       backend(wasm_code& code, host_t& host, wasm_allocator* alloc, const Options& options = Options{})
-         : memory_alloc(alloc), ctx(parse_module(code, options), detail::get_max_call_depth(options)) {
-         ctx.set_max_pages(detail::get_max_pages(options));
+         : memory_alloc(alloc), ctx(new context_t{parse_module(code, options), detail::get_max_call_depth(options)}) {
+         ctx->set_max_pages(detail::get_max_pages(options));
          construct(&host);
       }
       backend(wasm_code& code, wasm_allocator* alloc, const Options& options = Options{})
-         : memory_alloc(alloc), ctx(parse_module(code, options), detail::get_max_call_depth(options)) {
-         ctx.set_max_pages(detail::get_max_pages(options));
+         : memory_alloc(alloc), ctx(new context_t{(parse_module(code, options)), detail::get_max_call_depth(options)}) {
+         ctx->set_max_pages(detail::get_max_pages(options));
          construct();
       }
       backend(wasm_code_ptr& ptr, size_t sz, host_t& host, wasm_allocator* alloc, const Options& options = Options{})
-         : memory_alloc(alloc), ctx(parse_module2(ptr, sz, options, true), detail::get_max_call_depth(options)) { // single parsing. original behavior
-         ctx.set_max_pages(detail::get_max_pages(options));
+         : memory_alloc(alloc), ctx(new context_t{parse_module2(ptr, sz, options, true), detail::get_max_call_depth(options)}) { // single parsing. original behavior {
+         ctx->set_max_pages(detail::get_max_pages(options));
          construct(&host);
       }
       // Leap:
       //  * Contract validation only needs single parsing as the instantiated module is not cached.
       //  * JIT execution needs single parsing only.
       //  * Interpreter execution requires two-passes parsing to prevent memory mappings exhaustion
-      backend(wasm_code_ptr& ptr, size_t sz, wasm_allocator* alloc, const Options& options = Options{}, bool single_parsing = true)
-         : memory_alloc(alloc), ctx(parse_module2(ptr, sz, options, single_parsing), detail::get_max_call_depth(options)) {
-         ctx.set_max_pages(detail::get_max_pages(options));
+      backend(wasm_code_ptr& ptr, size_t sz, wasm_allocator* alloc, const Options& options = Options{}, bool single_parsing = true, bool backend_owns_exec_ctx = true)
+         : memory_alloc(alloc), owns_exec_ctx(backend_owns_exec_ctx), initial_max_call_depth(detail::get_max_call_depth(options)), initial_max_pages(detail::get_max_pages(options)) {
+         if (owns_exec_ctx) {
+            ctx = new context_t{parse_module2(ptr, sz, options, single_parsing), initial_max_call_depth};
+            ctx->set_max_pages(initial_max_pages);
+         } else {
+            parse_module2(ptr, sz, options, single_parsing);
+         }
          construct();
+      }
+
+      ~backend() {
+         if (owns_exec_ctx && ctx) {
+            delete ctx;
+         }
       }
 
       module& parse_module(wasm_code& code, const Options& options) {
@@ -148,6 +165,18 @@ namespace eosio { namespace vm {
          }
       }
 
+      void set_context(context_t* ctx_ptr) {
+         ctx = ctx_ptr;
+      }
+
+      inline void reset_max_call_depth() {
+         ctx->set_max_call_depth(initial_max_call_depth);
+      }
+
+      inline void reset_max_pages() {
+         ctx->set_max_pages(initial_max_pages);
+      }
+
       template <typename... Args>
       inline auto operator()(host_t& host, const std::string_view& mod, const std::string_view& func, Args... args) {
          return call(host, mod, func, args...);
@@ -160,16 +189,16 @@ namespace eosio { namespace vm {
 
       // Only dynamic options matter.  Parser options will be ignored.
       inline backend& initialize(host_t* host, const Options& new_options) {
-         ctx.set_max_call_depth(detail::get_max_call_depth(new_options));
-         ctx.set_max_pages(detail::get_max_pages(new_options));
+         ctx->set_max_call_depth(detail::get_max_call_depth(new_options));
+         ctx->set_max_pages(detail::get_max_pages(new_options));
          initialize(host);
          return *this;
       }
 
       inline backend& initialize(host_t* host=nullptr) {
          if (memory_alloc) {
-            ctx.reset();
-            ctx.execute_start(host, interpret_visitor(ctx));
+            ctx->reset();
+            ctx->execute_start(host, interpret_visitor(*ctx));
          }
          return *this;
       }
@@ -178,12 +207,13 @@ namespace eosio { namespace vm {
          return initialize(&host);
       }
 
+
       template <typename... Args>
       inline bool call_indirect(host_t* host, uint32_t func_index, Args... args) {
          if constexpr (eos_vm_debug) {
-            ctx.execute_func_table(host, debug_visitor(ctx), func_index, args...);
+            ctx->execute_func_table(host, debug_visitor(*ctx), func_index, args...);
          } else {
-            ctx.execute_func_table(host, interpret_visitor(ctx), func_index, args...);
+            ctx->execute_func_table(host, interpret_visitor(*ctx), func_index, args...);
          }
          return true;
       }
@@ -191,9 +221,9 @@ namespace eosio { namespace vm {
       template <typename... Args>
       inline bool call(host_t* host, uint32_t func_index, Args... args) {
          if constexpr (eos_vm_debug) {
-            ctx.execute(host, debug_visitor(ctx), func_index, args...);
+            ctx->execute(host, debug_visitor(*ctx), func_index, args...);
          } else {
-            ctx.execute(host, interpret_visitor(ctx), func_index, args...);
+            ctx->execute(host, interpret_visitor(*ctx), func_index, args...);
          }
          return true;
       }
@@ -201,9 +231,9 @@ namespace eosio { namespace vm {
       template <typename... Args>
       inline bool call(host_t& host, const std::string_view& mod, const std::string_view& func, Args... args) {
          if constexpr (eos_vm_debug) {
-            ctx.execute(&host, debug_visitor(ctx), func, args...);
+            ctx->execute(&host, debug_visitor(*ctx), func, args...);
          } else {
-            ctx.execute(&host, interpret_visitor(ctx), func, args...);
+            ctx->execute(&host, interpret_visitor(*ctx), func, args...);
          }
          return true;
       }
@@ -211,9 +241,9 @@ namespace eosio { namespace vm {
       template <typename... Args>
       inline bool call(const std::string_view& mod, const std::string_view& func, Args... args) {
          if constexpr (eos_vm_debug) {
-            ctx.execute(nullptr, debug_visitor(ctx), func, args...);
+            ctx->execute(nullptr, debug_visitor(*ctx), func, args...);
          } else {
-            ctx.execute(nullptr, interpret_visitor(ctx), func, args...);
+            ctx->execute(nullptr, interpret_visitor(*ctx), func, args...);
          }
          return true;
       }
@@ -221,18 +251,18 @@ namespace eosio { namespace vm {
       template <typename... Args>
       inline auto call_with_return(host_t& host, const std::string_view& mod, const std::string_view& func, Args... args ) {
          if constexpr (eos_vm_debug) {
-            return ctx.execute(&host, debug_visitor(ctx), func, args...);
+            return ctx->execute(&host, debug_visitor(*ctx), func, args...);
          } else {
-            return ctx.execute(&host, interpret_visitor(ctx), func, args...);
+            return ctx->execute(&host, interpret_visitor(*ctx), func, args...);
          }
       }
 
       template <typename... Args>
       inline auto call_with_return(const std::string_view& mod, const std::string_view& func, Args... args) {
          if constexpr (eos_vm_debug) {
-            return ctx.execute(nullptr, debug_visitor(ctx), func, args...);
+            return ctx->execute(nullptr, debug_visitor(*ctx), func, args...);
          } else {
-            return ctx.execute(nullptr, interpret_visitor(ctx), func, args...);
+            return ctx->execute(nullptr, interpret_visitor(*ctx), func, args...);
          }
       }
 
@@ -265,7 +295,7 @@ namespace eosio { namespace vm {
             for (int i = 0; i < mod.exports.size(); i++) {
                if (mod.exports[i].kind == external_kind::Function) {
                   std::string s{ (const char*)mod.exports[i].field_str.raw(), mod.exports[i].field_str.size() };
-                  ctx.execute(host, interpret_visitor(ctx), s);
+                  ctx->execute(host, interpret_visitor(*ctx), s);
                }
             }
          });
@@ -277,7 +307,7 @@ namespace eosio { namespace vm {
             for (int i = 0; i < mod.exports.size(); i++) {
                if (mod.exports[i].kind == external_kind::Function) {
                   std::string s{ (const char*)mod.exports[i].field_str.raw(), mod.exports[i].field_str.size() };
-                  ctx.execute(nullptr, interpret_visitor(ctx), s);
+                  ctx->execute(nullptr, interpret_visitor(*ctx), s);
                }
             }
          });
@@ -285,13 +315,13 @@ namespace eosio { namespace vm {
 
       inline void set_wasm_allocator(wasm_allocator* alloc) {
          memory_alloc = alloc;
-         ctx.set_wasm_allocator(memory_alloc);
+         ctx->set_wasm_allocator(memory_alloc);
       }
 
       inline wasm_allocator* get_wasm_allocator() { return memory_alloc; }
       inline module&         get_module() { return mod; }
-      inline void            exit(const std::error_code& ec) { ctx.exit(ec); }
-      inline auto&           get_context() { return ctx; }
+      inline void            exit(const std::error_code& ec) { ctx->exit(ec); }
+      inline auto&           get_context() { return *ctx; }
 
       const DebugInfo& get_debug() const { return debug; }
 
@@ -299,6 +329,9 @@ namespace eosio { namespace vm {
       wasm_allocator* memory_alloc = nullptr; // non owning pointer
       module          mod;
       DebugInfo       debug;
-      context_t       ctx;
+      context_t*      ctx = nullptr;
+      bool            owns_exec_ctx = true;
+      uint32_t        initial_max_call_depth;
+      uint32_t        initial_max_pages;
    };
 }} // namespace eosio::vm
