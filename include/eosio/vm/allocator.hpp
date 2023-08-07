@@ -294,35 +294,22 @@ namespace eosio { namespace vm {
          // uses mmap for big memory allocation
          _base = (char*)mmap(NULL, max_memory_size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
          EOS_VM_ASSERT(_base != MAP_FAILED, wasm_bad_alloc, "failed to mmap for default memory.");
-         _mmap_used = true;
          _capacity = max_memory_size;
       }
 
       // size in bytes
-      void use_fixed_memory(bool is_jit, size_t size) {
+      void use_fixed_memory(size_t size) {
          EOS_VM_ASSERT(0 < size && size <= max_memory_size, wasm_bad_alloc, "Too large or 0 fixed memory size");
          EOS_VM_ASSERT(_base == nullptr, wasm_bad_alloc, "Fixed memory already allocated");
 
-         _is_jit = is_jit;
-         if (_is_jit) {
-            _base = (char*)std::calloc(size, sizeof(char));
-            EOS_VM_ASSERT(_base != nullptr, wasm_bad_alloc, "malloc in use_fixed_memory failed.");
-            _mmap_used = false;
-         } else {
-            _base = (char*)mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-            EOS_VM_ASSERT(_base != MAP_FAILED, wasm_bad_alloc, "mmap in use_fixed_memoryfailed.");
-            _mmap_used = true;
-         }
+         _base = (char*)mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+         EOS_VM_ASSERT(_base != MAP_FAILED, wasm_bad_alloc, "mmap in use_fixed_memory failed.");
          _capacity = size;
       }
 
       ~growable_allocator() {
          if (_base != nullptr) {
-            if (_mmap_used) {
-                munmap(_base, _capacity);
-            } else {
-                std::free(_base);
-            }
+            munmap(_base, _capacity);
          }
          if (_is_jit && _code_base) {
             jit_allocator::instance().free(_code_base);
@@ -373,11 +360,6 @@ namespace eosio { namespace vm {
          }
       }
 
-      void set_code_base_and_size(char* code_base, size_t code_size) {
-         _code_base = code_base;
-         _code_size = code_size;
-      }
-
       // Sets protection on code pages to allow them to be executed.
       void enable_code(bool is_jit) {
          mprotect(_code_base, _code_size, is_jit?PROT_EXEC:(PROT_READ|PROT_WRITE));
@@ -409,17 +391,30 @@ namespace eosio { namespace vm {
        * Finalize the memory by unmapping any excess pages, this means that the allocator will no longer grow
        */
       void finalize() {
-         if(_mmap_used && _capacity != _offset) {
+         if(_capacity != _offset) {
             std::size_t final_size = align_to_page(_offset);
             if (final_size < _capacity) { // final_size can grow to _capacity after align_to_page.
                                           // make sure no 0 size passed to munmap
                EOS_VM_ASSERT(munmap(_base + final_size, _capacity - final_size) == 0, wasm_bad_alloc, "failed to finalize growable_allocator");
+               _capacity = _offset = final_size;
+               if (final_size == 0) {
+                  // _base became invalid after munmap if final_size is 0 so
+                  // set it to nullptr to avoid being used
+                  _base = nullptr;
+               }
             }
-            _capacity = _offset = final_size;
          }
       }
 
       void free() { EOS_VM_ASSERT(false, wasm_bad_alloc, "unimplemented"); }
+
+      void release_base_memory()
+      {
+         if (_base != nullptr) {
+            EOS_VM_ASSERT(munmap(_base, _capacity) == 0, wasm_bad_alloc, "failed to release base memory");
+            _base = nullptr;
+         }
+      }
 
       void reset() { _offset = 0; }
 
@@ -430,7 +425,6 @@ namespace eosio { namespace vm {
       char*    _code_base             = nullptr;
       size_t   _code_size             = 0;
       bool     _is_jit                = false;
-      bool     _mmap_used             = false;
    };
 
    template <typename T>
