@@ -175,7 +175,7 @@ namespace eosio { namespace vm {
          }
 
          // Globals are different from contract to contract.
-         // Need to clear _globals in execution context.
+         // Need to clear _globals at the start of an execution.
          _globals.clear();
          _globals.reserve(mod.globals.size());
          for (uint32_t i = 0; i < mod.globals.size(); i++) {

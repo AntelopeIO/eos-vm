@@ -65,7 +65,7 @@ namespace eosio { namespace vm {
       using parser_t   = typename Impl::template parser<HostFunctions, Options, DebugInfo>;
       void construct(host_t* host=nullptr) {
          mod.finalize();
-         if (owns_exec_ctx) {
+         if (exec_ctx_created_by_backend) {
             ctx->set_wasm_allocator(memory_alloc);
          }
          // Now data required by JIT is finalized; create JIT module
@@ -76,13 +76,13 @@ namespace eosio { namespace vm {
             // Important. Release the memory used by parsing.
             mod.allocator.release_base_memory();
          }
-         if (owns_exec_ctx) {
+         if (exec_ctx_created_by_backend) {
             ctx->initialize_globals();
          }
          if constexpr (!std::is_same_v<HostFunctions, std::nullptr_t>)
             HostFunctions::resolve(mod);
          // FIXME: should not hard code knowledge of null_backend here
-         if (owns_exec_ctx) {
+         if (exec_ctx_created_by_backend) {
             if constexpr (!std::is_same_v<Impl, null_backend>)
                initialize(host);
          }
@@ -117,9 +117,11 @@ namespace eosio { namespace vm {
       //  * Contract validation only needs single parsing as the instantiated module is not cached.
       //  * JIT execution needs single parsing only.
       //  * Interpreter execution requires two-passes parsing to prevent memory mappings exhaustion
-      backend(wasm_code_ptr& ptr, size_t sz, wasm_allocator* alloc, const Options& options = Options{}, bool single_parsing = true, bool backend_owns_exec_ctx = true)
-         : memory_alloc(alloc), owns_exec_ctx(backend_owns_exec_ctx), initial_max_call_depth(detail::get_max_call_depth(options)), initial_max_pages(detail::get_max_pages(options)) {
-         if (owns_exec_ctx) {
+      //  * Leap reuses execution context per thread; is_exec_ctx_created_by_backend is set
+      //  to false when a backend is constructued
+      backend(wasm_code_ptr& ptr, size_t sz, wasm_allocator* alloc, const Options& options = Options{}, bool single_parsing = true, bool is_exec_ctx_created_by_backend = true)
+         : memory_alloc(alloc), exec_ctx_created_by_backend(is_exec_ctx_created_by_backend), initial_max_call_depth(detail::get_max_call_depth(options)), initial_max_pages(detail::get_max_pages(options)) {
+         if (exec_ctx_created_by_backend) {
             ctx = new context_t{parse_module2(ptr, sz, options, single_parsing), initial_max_call_depth};
             ctx->set_max_pages(initial_max_pages);
          } else {
@@ -129,9 +131,11 @@ namespace eosio { namespace vm {
       }
 
       ~backend() {
-         if (owns_exec_ctx && ctx) {
+         if (exec_ctx_created_by_backend && ctx) {
+            // delete only if the context was created by the backend
             delete ctx;
          }
+         ctx = nullptr;
       }
 
       module& parse_module(wasm_code& code, const Options& options) {
@@ -166,14 +170,18 @@ namespace eosio { namespace vm {
       }
 
       void set_context(context_t* ctx_ptr) {
+         // execution context can be only set when it is not already created by the backend
+         assert(!exec_ctx_created_by_backend);
          ctx = ctx_ptr;
       }
 
       inline void reset_max_call_depth() {
+         assert(!exec_ctx_created_by_backend);
          ctx->set_max_call_depth(initial_max_call_depth);
       }
 
       inline void reset_max_pages() {
+         assert(!exec_ctx_created_by_backend);
          ctx->set_max_pages(initial_max_pages);
       }
 
@@ -206,7 +214,6 @@ namespace eosio { namespace vm {
       inline backend& initialize(host_t& host) {
          return initialize(&host);
       }
-
 
       template <typename... Args>
       inline bool call_indirect(host_t* host, uint32_t func_index, Args... args) {
@@ -330,7 +337,7 @@ namespace eosio { namespace vm {
       module          mod;
       DebugInfo       debug;
       context_t*      ctx = nullptr;
-      bool            owns_exec_ctx = true;
+      bool            exec_ctx_created_by_backend = true; // true if execution context is created by backend (legacy behavior), false if provided by users (Leap uses this)
       uint32_t        initial_max_call_depth;
       uint32_t        initial_max_pages;
    };
