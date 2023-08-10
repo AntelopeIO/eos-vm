@@ -174,7 +174,7 @@ namespace eosio { namespace vm {
             memcpy((char*)(addr), data_seg.data.data(), data_seg.data.size());
          }
 
-         // Globals are different from contract to contract.
+         // Globals can be different from one WASM code to another.
          // Need to clear _globals at the start of an execution.
          _globals.clear();
          _globals.reserve(mod.globals.size());
@@ -555,7 +555,7 @@ namespace eosio { namespace vm {
 #endif
 
       host_type * _host = nullptr;
-      uint32_t _remaining_call_depth;
+      uint32_t _remaining_call_depth = 0;
    };
 
    template <typename Host>

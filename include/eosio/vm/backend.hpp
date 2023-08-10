@@ -135,7 +135,6 @@ namespace eosio { namespace vm {
             // delete only if the context was created by the backend
             delete ctx;
          }
-         ctx = nullptr;
       }
 
       module& parse_module(wasm_code& code, const Options& options) {
@@ -338,7 +337,7 @@ namespace eosio { namespace vm {
       DebugInfo       debug;
       context_t*      ctx = nullptr;
       bool            exec_ctx_created_by_backend = true; // true if execution context is created by backend (legacy behavior), false if provided by users (Leap uses this)
-      uint32_t        initial_max_call_depth;
-      uint32_t        initial_max_pages;
+      uint32_t        initial_max_call_depth = 0;
+      uint32_t        initial_max_pages = 0;
    };
 }} // namespace eosio::vm
