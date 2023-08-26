@@ -131,15 +131,6 @@ namespace eosio { namespace vm {
          construct();
       }
 
-      backend& operator=(const backend& other) {
-         if (this != &other) {
-            mod                    = other.mod;
-            exec_ctx_created_by_backend          = other.exec_ctx_created_by_backend;
-            initial_max_call_depth = other.initial_max_call_depth;
-            initial_max_pages      = other.initial_max_pages;
-         }
-         return *this;
-     }
 
       ~backend() {
          if (exec_ctx_created_by_backend && ctx) {
@@ -177,6 +168,13 @@ namespace eosio { namespace vm {
             mod->allocator.use_fixed_memory(largest_size);
             return parser_t{ mod->allocator, options }.parse_module2(orig_ptr, sz, *mod, debug);
          }
+      }
+
+      void share(const backend& from) {
+         mod                    = from.mod;
+         exec_ctx_created_by_backend  = from.exec_ctx_created_by_backend;
+         initial_max_call_depth = from.initial_max_call_depth;
+         initial_max_pages      = from.initial_max_pages;
       }
 
       void set_context(context_t* ctx_ptr) {
