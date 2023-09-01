@@ -90,27 +90,27 @@ namespace eosio { namespace vm {
     public:
       backend() {}
       backend(wasm_code&& code, host_t& host, wasm_allocator* alloc, const Options& options = Options{})
-         : memory_alloc(alloc), mod(std::make_shared<module>()), ctx(new context_t{parse_module(code, options), detail::get_max_call_depth(options)}) {
+         : memory_alloc(alloc), mod(std::make_shared<module>()), ctx(new context_t{parse_module(code, options), detail::get_max_call_depth(options)}), mod_sharable{true} {
          ctx->set_max_pages(detail::get_max_pages(options));
          construct(&host);
       }
       backend(wasm_code&& code, wasm_allocator* alloc, const Options& options = Options{})
-         : memory_alloc(alloc), mod(std::make_shared<module>()), ctx(new context_t{parse_module(code, options), detail::get_max_call_depth(options)}) {
+         : memory_alloc(alloc), mod(std::make_shared<module>()), ctx(new context_t{parse_module(code, options), detail::get_max_call_depth(options)}), mod_sharable{true} {
          ctx->set_max_pages(detail::get_max_pages(options));
          construct();
       }
       backend(wasm_code& code, host_t& host, wasm_allocator* alloc, const Options& options = Options{})
-         : memory_alloc(alloc), mod(std::make_shared<module>()), ctx(new context_t{parse_module(code, options), detail::get_max_call_depth(options)}) {
+         : memory_alloc(alloc), mod(std::make_shared<module>()), ctx(new context_t{parse_module(code, options), detail::get_max_call_depth(options)}), mod_sharable{true} {
          ctx->set_max_pages(detail::get_max_pages(options));
          construct(&host);
       }
       backend(wasm_code& code, wasm_allocator* alloc, const Options& options = Options{})
-         : memory_alloc(alloc), mod(std::make_shared<module>()), ctx(new context_t{(parse_module(code, options)), detail::get_max_call_depth(options)}) {
+         : memory_alloc(alloc), mod(std::make_shared<module>()), ctx(new context_t{(parse_module(code, options)), detail::get_max_call_depth(options)}), mod_sharable{true} {
          ctx->set_max_pages(detail::get_max_pages(options));
          construct();
       }
       backend(wasm_code_ptr& ptr, size_t sz, host_t& host, wasm_allocator* alloc, const Options& options = Options{})
-         : memory_alloc(alloc), mod(std::make_shared<module>()), ctx(new context_t{parse_module2(ptr, sz, options, true), detail::get_max_call_depth(options)}) { // single parsing. original behavior {
+         : memory_alloc(alloc), mod(std::make_shared<module>()), ctx(new context_t{parse_module2(ptr, sz, options, true), detail::get_max_call_depth(options)}), mod_sharable{true} { // single parsing. original behavior {
          ctx->set_max_pages(detail::get_max_pages(options));
          construct(&host);
       }
@@ -121,7 +121,7 @@ namespace eosio { namespace vm {
       //  * Leap reuses execution context per thread; is_exec_ctx_created_by_backend is set
       //  to false when a backend is constructued
       backend(wasm_code_ptr& ptr, size_t sz, wasm_allocator* alloc, const Options& options = Options{}, bool single_parsing = true, bool exec_ctx_by_backend = true)
-         : memory_alloc(alloc), mod(std::make_shared<module>()), exec_ctx_created_by_backend(exec_ctx_by_backend), initial_max_call_depth(detail::get_max_call_depth(options)), initial_max_pages(detail::get_max_pages(options)) {
+         : memory_alloc(alloc), mod(std::make_shared<module>()), exec_ctx_created_by_backend(exec_ctx_by_backend), mod_sharable{true}, initial_max_call_depth(detail::get_max_call_depth(options)), initial_max_pages(detail::get_max_pages(options)) {
          if (exec_ctx_created_by_backend) {
             ctx = new context_t{parse_module2(ptr, sz, options, single_parsing), initial_max_call_depth};
             ctx->set_max_pages(initial_max_pages);
@@ -170,8 +170,12 @@ namespace eosio { namespace vm {
          }
       }
 
+      // Shares compiled module with another backend which never compiles
+      // module itself.
       void share(const backend& from) {
-         mod                    = from.mod;
+         assert(from.mod_sharable);  // `from` backend's mod is sharable
+         assert(!mod_sharable); // `to` backend's mod must not be sharable
+         mod                          = from.mod;
          exec_ctx_created_by_backend  = from.exec_ctx_created_by_backend;
          initial_max_call_depth = from.initial_max_call_depth;
          initial_max_pages      = from.initial_max_pages;
@@ -347,6 +351,7 @@ namespace eosio { namespace vm {
       DebugInfo       debug;
       context_t*      ctx = nullptr;
       bool            exec_ctx_created_by_backend = true; // true if execution context is created by backend (legacy behavior), false if provided by users (Leap uses this)
+      bool            mod_sharable = false; // true if mod is sharable (compiled by the backend)
       uint32_t        initial_max_call_depth = 0;
       uint32_t        initial_max_pages = 0;
    };
