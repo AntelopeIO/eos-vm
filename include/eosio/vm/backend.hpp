@@ -64,23 +64,23 @@ namespace eosio { namespace vm {
       using context_t  = typename Impl::template context<HostFunctions>;
       using parser_t   = typename Impl::template parser<HostFunctions, Options, DebugInfo>;
       void construct(host_t* host=nullptr) {
-         mod.finalize();
+         mod->finalize();
          if (exec_ctx_created_by_backend) {
             ctx->set_wasm_allocator(memory_alloc);
          }
          // Now data required by JIT is finalized; create JIT module
          // such that memory used in parsing can be released.
          if constexpr (Impl::is_jit) {
-            mod.make_jit_module();
+            mod->make_jit_module();
 
             // Important. Release the memory used by parsing.
-            mod.allocator.release_base_memory();
+            mod->allocator.release_base_memory();
          }
          if (exec_ctx_created_by_backend) {
             ctx->initialize_globals();
          }
          if constexpr (!std::is_same_v<HostFunctions, std::nullptr_t>)
-            HostFunctions::resolve(mod);
+            HostFunctions::resolve(*mod);
          // FIXME: should not hard code knowledge of null_backend here
          if (exec_ctx_created_by_backend) {
             if constexpr (!std::is_same_v<Impl, null_backend>)
@@ -88,28 +88,29 @@ namespace eosio { namespace vm {
          }
       }
     public:
+      backend() {}
       backend(wasm_code&& code, host_t& host, wasm_allocator* alloc, const Options& options = Options{})
-         : memory_alloc(alloc), ctx(new context_t{parse_module(code, options), detail::get_max_call_depth(options)}) {
+         : memory_alloc(alloc), mod(std::make_shared<module>()), ctx(new context_t{parse_module(code, options), detail::get_max_call_depth(options)}), mod_sharable{true} {
          ctx->set_max_pages(detail::get_max_pages(options));
          construct(&host);
       }
       backend(wasm_code&& code, wasm_allocator* alloc, const Options& options = Options{})
-         : memory_alloc(alloc), ctx(new context_t{parse_module(code, options), detail::get_max_call_depth(options)}) {
+         : memory_alloc(alloc), mod(std::make_shared<module>()), ctx(new context_t{parse_module(code, options), detail::get_max_call_depth(options)}), mod_sharable{true} {
          ctx->set_max_pages(detail::get_max_pages(options));
          construct();
       }
       backend(wasm_code& code, host_t& host, wasm_allocator* alloc, const Options& options = Options{})
-         : memory_alloc(alloc), ctx(new context_t{parse_module(code, options), detail::get_max_call_depth(options)}) {
+         : memory_alloc(alloc), mod(std::make_shared<module>()), ctx(new context_t{parse_module(code, options), detail::get_max_call_depth(options)}), mod_sharable{true} {
          ctx->set_max_pages(detail::get_max_pages(options));
          construct(&host);
       }
       backend(wasm_code& code, wasm_allocator* alloc, const Options& options = Options{})
-         : memory_alloc(alloc), ctx(new context_t{(parse_module(code, options)), detail::get_max_call_depth(options)}) {
+         : memory_alloc(alloc), mod(std::make_shared<module>()), ctx(new context_t{(parse_module(code, options)), detail::get_max_call_depth(options)}), mod_sharable{true} {
          ctx->set_max_pages(detail::get_max_pages(options));
          construct();
       }
       backend(wasm_code_ptr& ptr, size_t sz, host_t& host, wasm_allocator* alloc, const Options& options = Options{})
-         : memory_alloc(alloc), ctx(new context_t{parse_module2(ptr, sz, options, true), detail::get_max_call_depth(options)}) { // single parsing. original behavior {
+         : memory_alloc(alloc), mod(std::make_shared<module>()), ctx(new context_t{parse_module2(ptr, sz, options, true), detail::get_max_call_depth(options)}), mod_sharable{true} { // single parsing. original behavior {
          ctx->set_max_pages(detail::get_max_pages(options));
          construct(&host);
       }
@@ -119,8 +120,8 @@ namespace eosio { namespace vm {
       //  * Interpreter execution requires two-passes parsing to prevent memory mappings exhaustion
       //  * Leap reuses execution context per thread; is_exec_ctx_created_by_backend is set
       //  to false when a backend is constructued
-      backend(wasm_code_ptr& ptr, size_t sz, wasm_allocator* alloc, const Options& options = Options{}, bool single_parsing = true, bool is_exec_ctx_created_by_backend = true)
-         : memory_alloc(alloc), exec_ctx_created_by_backend(is_exec_ctx_created_by_backend), initial_max_call_depth(detail::get_max_call_depth(options)), initial_max_pages(detail::get_max_pages(options)) {
+      backend(wasm_code_ptr& ptr, size_t sz, wasm_allocator* alloc, const Options& options = Options{}, bool single_parsing = true, bool exec_ctx_by_backend = true)
+         : memory_alloc(alloc), mod(std::make_shared<module>()), exec_ctx_created_by_backend(exec_ctx_by_backend), mod_sharable{true}, initial_max_call_depth(detail::get_max_call_depth(options)), initial_max_pages(detail::get_max_pages(options)) {
          if (exec_ctx_created_by_backend) {
             ctx = new context_t{parse_module2(ptr, sz, options, single_parsing), initial_max_call_depth};
             ctx->set_max_pages(initial_max_pages);
@@ -130,6 +131,7 @@ namespace eosio { namespace vm {
          construct();
       }
 
+
       ~backend() {
          if (exec_ctx_created_by_backend && ctx) {
             // delete only if the context was created by the backend
@@ -138,14 +140,14 @@ namespace eosio { namespace vm {
       }
 
       module& parse_module(wasm_code& code, const Options& options) {
-         mod.allocator.use_default_memory();
-         return parser_t{ mod.allocator, options }.parse_module(code, mod, debug);
+         mod->allocator.use_default_memory();
+         return parser_t{ mod->allocator, options }.parse_module(code, *mod, debug);
       }
 
       module& parse_module2(wasm_code_ptr& ptr, size_t sz, const Options& options, bool single_parsing) {
          if (single_parsing) {
-            mod.allocator.use_default_memory();
-            return parser_t{ mod.allocator, options }.parse_module2(ptr, sz, mod, debug);
+            mod->allocator.use_default_memory();
+            return parser_t{ mod->allocator, options }.parse_module2(ptr, sz, *mod, debug);
          } else {
             // To prevent large number of memory mappings used, two-passes of
             // parsing are performed.
@@ -163,23 +165,36 @@ namespace eosio { namespace vm {
             }
 
             // Second pass: uses actual required memory for final parsing
-            mod.allocator.use_fixed_memory(largest_size);
-            return parser_t{ mod.allocator, options }.parse_module2(orig_ptr, sz, mod, debug);
+            mod->allocator.use_fixed_memory(largest_size);
+            return parser_t{ mod->allocator, options }.parse_module2(orig_ptr, sz, *mod, debug);
          }
       }
 
+      // Shares compiled module with another backend which never compiles
+      // module itself.
+      void share(const backend& from) {
+         assert(from.mod_sharable);  // `from` backend's mod is sharable
+         assert(!mod_sharable); // `to` backend's mod must not be sharable
+         mod                          = from.mod;
+         exec_ctx_created_by_backend  = from.exec_ctx_created_by_backend;
+         initial_max_call_depth = from.initial_max_call_depth;
+         initial_max_pages      = from.initial_max_pages;
+      }
+
       void set_context(context_t* ctx_ptr) {
-         // execution context can be only set when it is not already created by the backend
+         // ctx cannot be set if it is created by the backend
          assert(!exec_ctx_created_by_backend);
          ctx = ctx_ptr;
       }
 
       inline void reset_max_call_depth() {
+         // max_call_depth cannot be reset if ctx is created by the backend
          assert(!exec_ctx_created_by_backend);
          ctx->set_max_call_depth(initial_max_call_depth);
       }
 
       inline void reset_max_pages() {
+         // max_pages cannot be reset if ctx is created by the backend
          assert(!exec_ctx_created_by_backend);
          ctx->set_max_pages(initial_max_pages);
       }
@@ -277,13 +292,13 @@ namespace eosio { namespace vm {
          std::atomic<bool>       _timed_out = false;
          auto reenable_code = scope_guard{[&](){
             if (_timed_out) {
-               mod.allocator.enable_code(Impl::is_jit);
+               mod->allocator.enable_code(Impl::is_jit);
             }
          }};
          try {
             auto wd_guard = wd.scoped_run([this,&_timed_out]() {
                _timed_out = true;
-               mod.allocator.disable_code();
+               mod->allocator.disable_code();
             });
             static_cast<F&&>(f)();
          } catch(wasm_memory_exception&) {
@@ -298,9 +313,9 @@ namespace eosio { namespace vm {
       template <typename Watchdog>
       inline void execute_all(Watchdog&& wd, host_t& host) {
          timed_run(static_cast<Watchdog&&>(wd), [&]() {
-            for (int i = 0; i < mod.exports.size(); i++) {
-               if (mod.exports[i].kind == external_kind::Function) {
-                  std::string s{ (const char*)mod.exports[i].field_str.raw(), mod.exports[i].field_str.size() };
+            for (int i = 0; i < mod->exports.size(); i++) {
+               if (mod->exports[i].kind == external_kind::Function) {
+                  std::string s{ (const char*)mod->exports[i].field_str.raw(), mod->exports[i].field_str.size() };
                   ctx->execute(host, interpret_visitor(*ctx), s);
                }
             }
@@ -310,9 +325,9 @@ namespace eosio { namespace vm {
       template <typename Watchdog>
       inline void execute_all(Watchdog&& wd) {
          timed_run(static_cast<Watchdog&&>(wd), [&]() {
-            for (int i = 0; i < mod.exports.size(); i++) {
-               if (mod.exports[i].kind == external_kind::Function) {
-                  std::string s{ (const char*)mod.exports[i].field_str.raw(), mod.exports[i].field_str.size() };
+            for (int i = 0; i < mod->exports.size(); i++) {
+               if (mod->exports[i].kind == external_kind::Function) {
+                  std::string s{ (const char*)mod->exports[i].field_str.raw(), mod->exports[i].field_str.size() };
                   ctx->execute(nullptr, interpret_visitor(*ctx), s);
                }
             }
@@ -324,8 +339,7 @@ namespace eosio { namespace vm {
          ctx->set_wasm_allocator(memory_alloc);
       }
 
-      inline wasm_allocator* get_wasm_allocator() { return memory_alloc; }
-      inline module&         get_module() { return mod; }
+      inline module&         get_module() { return *mod; }
       inline void            exit(const std::error_code& ec) { ctx->exit(ec); }
       inline auto&           get_context() { return *ctx; }
 
@@ -333,10 +347,11 @@ namespace eosio { namespace vm {
 
     private:
       wasm_allocator* memory_alloc = nullptr; // non owning pointer
-      module          mod;
+      std::shared_ptr<module> mod = nullptr;
       DebugInfo       debug;
       context_t*      ctx = nullptr;
       bool            exec_ctx_created_by_backend = true; // true if execution context is created by backend (legacy behavior), false if provided by users (Leap uses this)
+      bool            mod_sharable = false; // true if mod is sharable (compiled by the backend)
       uint32_t        initial_max_call_depth = 0;
       uint32_t        initial_max_pages = 0;
    };
