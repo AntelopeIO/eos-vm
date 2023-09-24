@@ -341,7 +341,7 @@ struct scoped_profile {
 #else
 
 __attribute__((visibility("default")))
-inline thread_local std::atomic<profile_data*> per_thread_profile_data = ATOMIC_VAR_INIT(nullptr);
+inline thread_local std::atomic<profile_data*> per_thread_profile_data{nullptr};
 
 inline void profile_handler(int sig, siginfo_t* info, void* uc) {
    static_assert(std::atomic<profile_data*>::is_always_lock_free);
