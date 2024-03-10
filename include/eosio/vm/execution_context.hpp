@@ -171,7 +171,8 @@ namespace eosio { namespace vm {
             auto required_memory = static_cast<uint64_t>(offset) + data_seg.data.size();
             EOS_VM_ASSERT(required_memory <= available_memory, wasm_memory_exception, "data out of range");
             auto addr = _linear_memory + offset;
-            memcpy((char*)(addr), data_seg.data.data(), data_seg.data.size());
+            if(data_seg.data.size())
+               memcpy((char*)(addr), data_seg.data.data(), data_seg.data.size());
          }
 
          // Globals can be different from one WASM code to another.
