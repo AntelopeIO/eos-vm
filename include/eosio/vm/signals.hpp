@@ -7,6 +7,7 @@
 #include <cstdlib>
 #include <exception>
 #include <utility>
+#include <span>
 #include <signal.h>
 #include <setjmp.h>
 
