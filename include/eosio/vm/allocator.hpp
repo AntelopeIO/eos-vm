@@ -9,6 +9,7 @@
 #include <cstring>
 #include <map>
 #include <set>
+#include <span>
 #include <memory>
 #include <mutex>
 #include <utility>
