@@ -27,22 +27,22 @@ namespace eosio { namespace vm {
    template<int Sig>
    inline struct sigaction prev_signal_handler;
 
+   inline bool in_protected_range(void* addr) {
+      //empty protection list means legacy catch-all behavior; useful for some of the old tests
+      if(protected_memory_ranges.empty())
+         return true;
+
+      for(const std::span<std::byte>& range : protected_memory_ranges) {
+         if(addr >= range.data() && addr < range.data() + range.size())
+            return true;
+      }
+      return false;
+   }
+
    inline void signal_handler(int sig, siginfo_t* info, void* uap) {
       sigjmp_buf* dest = std::atomic_load(&signal_dest);
 
-      auto in_protected_range = [&]() {
-         //empty protection list means legacy catch-all behavior; useful for some of the old tests
-         if(protected_memory_ranges.empty())
-            return true;
-
-         for(const std::span<std::byte>& range : protected_memory_ranges) {
-            if(info->si_addr >= range.data() && info->si_addr < range.data() + range.size())
-               return true;
-         }
-         return false;
-      };
-
-      if (dest && in_protected_range()) {
+      if (dest && in_protected_range(info->si_addr)) {
          siglongjmp(*dest, sig);
       } else {
          struct sigaction* prev_action;
