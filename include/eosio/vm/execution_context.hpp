@@ -358,11 +358,11 @@ namespace eosio { namespace vm {
 
                   vm::invoke_with_signal_handler([&]() {
                      result = execute<sizeof...(Args)>(args_raw, fn, this, base_type::linear_memory(), stack);
-                  }, &handle_signal);
+                  }, &handle_signal, {_mod->allocator.get_code_span(),  base_type::get_wasm_allocator()->get_span()});
                } else {
                   vm::invoke_with_signal_handler([&]() {
                      result = execute<sizeof...(Args)>(args_raw, fn, this, base_type::linear_memory(), stack);
-                  }, &handle_signal);
+                  }, &handle_signal, {_mod->allocator.get_code_span(),  base_type::get_wasm_allocator()->get_span()});
                }
             }
          } catch(wasm_exit_exception&) {
@@ -800,7 +800,7 @@ namespace eosio { namespace vm {
             setup_locals(func_index);
             vm::invoke_with_signal_handler([&]() {
                execute(visitor);
-            }, &handle_signal);
+            }, &handle_signal, {_mod->allocator.get_code_span(),  base_type::get_wasm_allocator()->get_span()});
          }
 
          if (_mod->get_function_type(func_index).return_count && !_state.exiting) {
