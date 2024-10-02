@@ -58,6 +58,30 @@ namespace eosio { namespace vm {
       static constexpr bool is_jit = false;
    };
 
+   template <typename T>
+   struct maybe_unique_ptr {
+      maybe_unique_ptr(T* ptr = nullptr, bool owns = true) : ptr(ptr), owns(owns) {}
+      maybe_unique_ptr(const maybe_unique_ptr&) = delete;
+      maybe_unique_ptr& operator=(const maybe_unique_ptr&) = delete;
+      ~maybe_unique_ptr() {
+         if (ptr && owns)
+            delete ptr;
+      }
+      T& operator*() const { return *ptr; }
+      T* operator->() const { return ptr; }
+      T* get() const { return ptr; }
+      void reset(T* new_ptr, bool new_owns = true) {
+         if (ptr && owns)
+            delete ptr;
+         this->ptr = new_ptr;
+         this->owns = new_owns;
+      }
+   private:
+      T* ptr;
+   public:
+      bool owns;
+   };
+
    template <typename HostFunctions = std::nullptr_t, typename Impl = interpreter, typename Options = default_options, typename DebugInfo = null_debug_info>
    class backend {
       using host_t     = detail::host_type_t<HostFunctions>;
@@ -65,7 +89,7 @@ namespace eosio { namespace vm {
       using parser_t   = typename Impl::template parser<HostFunctions, Options, DebugInfo>;
       void construct(host_t* host=nullptr) {
          mod->finalize();
-         if (exec_ctx_created_by_backend) {
+         if (ctx.owns) {
             ctx->set_wasm_allocator(memory_alloc);
          }
          // Now data required by JIT is finalized; create JIT module
@@ -76,13 +100,13 @@ namespace eosio { namespace vm {
             // Important. Release the memory used by parsing.
             mod->allocator.release_base_memory();
          }
-         if (exec_ctx_created_by_backend) {
+         if (ctx.owns) {
             ctx->initialize_globals();
          }
          if constexpr (!std::is_same_v<HostFunctions, std::nullptr_t>)
             HostFunctions::resolve(*mod);
          // FIXME: should not hard code knowledge of null_backend here
-         if (exec_ctx_created_by_backend) {
+         if (ctx.owns) {
             if constexpr (!std::is_same_v<Impl, null_backend>)
                initialize(host);
          }
@@ -118,25 +142,17 @@ namespace eosio { namespace vm {
       //  * Contract validation only needs single parsing as the instantiated module is not cached.
       //  * JIT execution needs single parsing only.
       //  * Interpreter execution requires two-passes parsing to prevent memory mappings exhaustion
-      //  * Leap reuses execution context per thread; is_exec_ctx_created_by_backend is set
+      //  * Leap reuses execution context per thread; ctx.owns is set
       //  to false when a backend is constructued
       backend(wasm_code_ptr& ptr, size_t sz, wasm_allocator* alloc, const Options& options = Options{}, bool single_parsing = true, bool exec_ctx_by_backend = true)
-         : memory_alloc(alloc), mod(std::make_shared<module>()), exec_ctx_created_by_backend(exec_ctx_by_backend), mod_sharable{true}, initial_max_call_depth(detail::get_max_call_depth(options)), initial_max_pages(detail::get_max_pages(options)) {
-         if (exec_ctx_created_by_backend) {
-            ctx = new context_t{parse_module2(ptr, sz, options, single_parsing), initial_max_call_depth};
+         : memory_alloc(alloc), mod(std::make_shared<module>()), ctx(nullptr, exec_ctx_by_backend), mod_sharable{true}, initial_max_call_depth(detail::get_max_call_depth(options)), initial_max_pages(detail::get_max_pages(options)) {
+         if (ctx.owns) {
+            ctx.reset(new context_t{parse_module2(ptr, sz, options, single_parsing), initial_max_call_depth});
             ctx->set_max_pages(initial_max_pages);
          } else {
             parse_module2(ptr, sz, options, single_parsing);
          }
          construct();
-      }
-
-
-      ~backend() {
-         if (exec_ctx_created_by_backend && ctx) {
-            // delete only if the context was created by the backend
-            delete ctx;
-         }
       }
 
       module& parse_module(wasm_code& code, const Options& options) {
@@ -176,26 +192,26 @@ namespace eosio { namespace vm {
          assert(from.mod_sharable);  // `from` backend's mod is sharable
          assert(!mod_sharable); // `to` backend's mod must not be sharable
          mod                          = from.mod;
-         exec_ctx_created_by_backend  = from.exec_ctx_created_by_backend;
+         ctx.owns  = from.ctx.owns;
          initial_max_call_depth = from.initial_max_call_depth;
          initial_max_pages      = from.initial_max_pages;
       }
 
       void set_context(context_t* ctx_ptr) {
          // ctx cannot be set if it is created by the backend
-         assert(!exec_ctx_created_by_backend);
-         ctx = ctx_ptr;
+         assert(!ctx.owns);
+         ctx.reset(ctx_ptr, false);
       }
 
       inline void reset_max_call_depth() {
          // max_call_depth cannot be reset if ctx is created by the backend
-         assert(!exec_ctx_created_by_backend);
+         assert(!ctx.owns);
          ctx->set_max_call_depth(initial_max_call_depth);
       }
 
       inline void reset_max_pages() {
          // max_pages cannot be reset if ctx is created by the backend
-         assert(!exec_ctx_created_by_backend);
+         assert(!ctx.owns);
          ctx->set_max_pages(initial_max_pages);
       }
 
@@ -349,8 +365,7 @@ namespace eosio { namespace vm {
       wasm_allocator* memory_alloc = nullptr; // non owning pointer
       std::shared_ptr<module> mod = nullptr;
       DebugInfo       debug;
-      context_t*      ctx = nullptr;
-      bool            exec_ctx_created_by_backend = true; // true if execution context is created by backend (legacy behavior), false if provided by users (Leap uses this)
+      maybe_unique_ptr<context_t> ctx = nullptr;
       bool            mod_sharable = false; // true if mod is sharable (compiled by the backend)
       uint32_t        initial_max_call_depth = 0;
       uint32_t        initial_max_pages = 0;
