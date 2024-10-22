@@ -319,7 +319,7 @@ namespace eosio { namespace vm {
          _host = host;
 
          const auto& ft = _mod->jit_mod->get_function_type(func_index);
-         this->type_check_args(ft, args...);
+         this->type_check_args(ft, std::forward<Args>(args)... ); // args not modified by type_check_args
          native_value result;
 
 #pragma GCC diagnostic push
@@ -789,7 +789,7 @@ namespace eosio { namespace vm {
             _last_op_index = last_last_op_index;
          });
 
-         this->type_check_args(_mod->get_function_type(func_index), args...);
+         this->type_check_args(_mod->get_function_type(func_index), std::forward<Args>(args)...); // args not modified
          push_args(std::forward<Args>(args)...);
          push_call<true>(func_index);
 
