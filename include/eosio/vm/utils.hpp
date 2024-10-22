@@ -92,7 +92,7 @@ namespace eosio { namespace vm {
 
    template<typename F>
    struct scope_guard {
-      scope_guard(F&& f) : _f(static_cast<F&&>(f)) {}
+      scope_guard(F&& f) : _f(std::move(f)) {}
       ~scope_guard() { _f(); }
       F _f;
    };

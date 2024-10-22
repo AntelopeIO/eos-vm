@@ -312,11 +312,11 @@ namespace eosio { namespace vm {
             }
          }};
          try {
-            auto wd_guard = wd.scoped_run([this,&_timed_out]() {
+            auto wd_guard = std::forward<Watchdog>(wd).scoped_run([this,&_timed_out]() {
                _timed_out = true;
                mod->allocator.disable_code();
             });
-            static_cast<F&&>(f)();
+            std::forward<F>(f)();
          } catch(wasm_memory_exception&) {
             if (_timed_out) {
                throw timeout_exception{ "execution timed out" };
@@ -328,7 +328,7 @@ namespace eosio { namespace vm {
 
       template <typename Watchdog>
       inline void execute_all(Watchdog&& wd, host_t& host) {
-         timed_run(static_cast<Watchdog&&>(wd), [&]() {
+         timed_run(std::forward<Watchdog>(wd), [&]() {
             for (int i = 0; i < mod->exports.size(); i++) {
                if (mod->exports[i].kind == external_kind::Function) {
                   std::string s{ (const char*)mod->exports[i].field_str.raw(), mod->exports[i].field_str.size() };
@@ -340,7 +340,7 @@ namespace eosio { namespace vm {
 
       template <typename Watchdog>
       inline void execute_all(Watchdog&& wd) {
-         timed_run(static_cast<Watchdog&&>(wd), [&]() {
+         timed_run(std::forward<Watchdog>(wd), [&]() {
             for (int i = 0; i < mod->exports.size(); i++) {
                if (mod->exports[i].kind == external_kind::Function) {
                   std::string s{ (const char*)mod->exports[i].field_str.raw(), mod->exports[i].field_str.size() };

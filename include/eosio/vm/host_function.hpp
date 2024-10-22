@@ -238,9 +238,9 @@ namespace eosio { namespace vm {
       template <typename Type_Converter, typename T>
       constexpr auto resolve_result(Type_Converter& tc, T&& val) {
          if constexpr (has_to_wasm_v<T, Type_Converter>) {
-            return tc.as_result(tc.to_wasm(static_cast<T&&>(val)));
+            return tc.as_result(tc.to_wasm(std::forward<T>(val)));
          } else {
-            return tc.as_result(static_cast<T&&>(val));
+            return tc.as_result(std::forward<T>(val));
          }
       }
 
@@ -281,7 +281,7 @@ namespace eosio { namespace vm {
 
    template <bool Once, typename T, typename F, typename... Args>
    void invoke_on(F&& func, const Args&... args) {
-      detail::invoke_on_impl<Once, 0, T>(static_cast<F&&>(func), args...);
+      detail::invoke_on_impl<Once, 0, T>(std::forward<F>(func), args...);
    }
 
 #define EOS_VM_INVOKE_ON(TYPE, CONDITION) \
@@ -304,15 +304,15 @@ namespace eosio { namespace vm {
    template <auto F, typename Preconditions, typename Type_Converter, typename Host, typename... Args>
    decltype(auto) invoke_impl(Type_Converter& tc, Host* host, Args&&... args) {
       if constexpr (std::is_same_v<Host, standalone_function_t>)
-         return std::invoke(F, static_cast<Args&&>(args)...);
+         return std::invoke(F, std::forward<Args>(args)...);
       else
-         return std::invoke(F, host, static_cast<Args&&>(args)...);
+         return std::invoke(F, host, std::forward<Args>(args)...);
    }
 
    template <auto F, typename Preconditions, typename Host, typename Args, typename Type_Converter, std::size_t... Is>
    decltype(auto) invoke_with_host_impl(Type_Converter& tc, Host* host, Args&& args, std::index_sequence<Is...>) {
       detail::preconditions_runner<0, Preconditions>(tc, args);
-      return invoke_impl<F, Preconditions>(tc, host, std::get<Is>(static_cast<Args&&>(args))...);
+      return invoke_impl<F, Preconditions>(tc, host, std::get<Is>(std::forward<Args>(args))...);
    }
 
    template <auto F, typename Preconditions, typename Args, typename Type_Converter, typename Host, std::size_t... Is>
@@ -325,7 +325,7 @@ namespace eosio { namespace vm {
    void maybe_push_result(Type_Converter& tc, T&& res, std::size_t trim_amt) {
       if constexpr (!std::is_same_v<std::decay_t<T>, maybe_void_t>) {
          tc.get_interface().trim_operands(trim_amt);
-         tc.get_interface().push_operand(detail::resolve_result(tc, static_cast<T&&>(res)));
+         tc.get_interface().push_operand(detail::resolve_result(tc, std::forward<T>(res)));
       } else {
          tc.get_interface().trim_operands(trim_amt);
       }

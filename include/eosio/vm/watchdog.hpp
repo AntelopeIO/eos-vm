@@ -24,7 +24,7 @@ namespace eosio { namespace vm {
       /// be called.
       template<typename F>
       [[nodiscard]] guard scoped_run(F&& callback) {
-         return guard(_duration, static_cast<F&&>(callback));
+         return guard(_duration, std::forward<F>(callback));
       }
 
     private:
@@ -35,7 +35,7 @@ namespace eosio { namespace vm {
 
          template <typename TimeUnits, typename F>
          guard(const TimeUnits& duration, F&& callback)
-            : _callback(static_cast<F&&>(callback)),
+            : _callback(std::forward<F>(callback)),
               _run_state(running),
               _duration(duration),
               _start(std::chrono::steady_clock::now()) {
