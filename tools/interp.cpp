@@ -31,7 +31,7 @@ int main(int argc, char** argv) {
       backend<std::nullptr_t, interpreter, default_options> bkend( code, &wa );
 
       // Execute any exported functions provided by the wasm.
-      bkend.execute_all(wd);
+      bkend.execute_all(std::move(wd));
 
    } catch ( const eosio::vm::exception& ex ) {
       std::cerr << "eos-vm interpreter error\n";
