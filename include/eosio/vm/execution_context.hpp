@@ -186,7 +186,7 @@ namespace eosio { namespace vm {
 
       template <typename Visitor, typename... Args>
       inline std::optional<operand_stack_elem> execute(host_type* host, Visitor&& visitor, const std::string_view func,
-                                               Args... args) {
+                                               Args&&... args) {
          uint32_t func_index = _mod->get_exported_function(func);
          return derived().execute(host, std::forward<Visitor>(visitor), func_index, std::forward<Args>(args)...);
       }
@@ -311,7 +311,7 @@ namespace eosio { namespace vm {
       }
 
       template <typename... Args>
-      inline std::optional<operand_stack_elem> execute(host_type* host, jit_visitor, uint32_t func_index, Args... args) {
+      inline std::optional<operand_stack_elem> execute(host_type* host, jit_visitor, uint32_t func_index, Args&&... args) {
          auto saved_host = _host;
          auto saved_os_size = get_operand_stack().size();
          auto g = scope_guard([&](){ _host = saved_host; get_operand_stack().eat(saved_os_size); });
@@ -319,14 +319,14 @@ namespace eosio { namespace vm {
          _host = host;
 
          const auto& ft = _mod->jit_mod->get_function_type(func_index);
-         this->type_check_args(ft, static_cast<Args&&>(args)...);
+         this->type_check_args(ft, std::forward<Args>(args)... ); // args not modified by type_check_args
          native_value result;
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-value"
          // Calling execute() with no `args` (i.e. `execute(host_type,jit_visitor,uint32_t)`) results in a "statement has no
          // effect [-Werror=unused-value]" warning on this line. Dissable warning.
-         native_value args_raw[] = { transform_arg( static_cast<Args&&>(args))... };
+         native_value args_raw[] = { transform_arg( std::forward<Args>(args))... };
 #pragma GCC diagnostic pop
 
          try {
@@ -482,7 +482,7 @@ namespace eosio { namespace vm {
          native_value result;
          std::memset(&result, 0, sizeof(result));
          auto tc = detail::type_converter_t<Host>{_host, get_interface()};
-         auto transformed_value = detail::resolve_result(tc, static_cast<T&&>(value)).data;
+         auto transformed_value = detail::resolve_result(tc, std::forward<T>(value)).data;
          std::memcpy(&result, &transformed_value, sizeof(transformed_value));
          return result;
       }
@@ -750,13 +750,13 @@ namespace eosio { namespace vm {
 
       template <typename Visitor, typename... Args>
       inline std::optional<operand_stack_elem> execute_func_table(host_type* host, Visitor&& visitor, uint32_t table_index,
-                                                          Args... args) {
+                                                                  Args&&... args) {
          return execute(host, std::forward<Visitor>(visitor), table_elem(table_index), std::forward<Args>(args)...);
       }
 
       template <typename Visitor, typename... Args>
       inline std::optional<operand_stack_elem> execute(host_type* host, Visitor&& visitor, const std::string_view func,
-                                               Args... args) {
+                                                       Args&&... args) {
          uint32_t func_index = _mod->get_exported_function(func);
          return execute(host, std::forward<Visitor>(visitor), func_index, std::forward<Args>(args)...);
       }
@@ -768,7 +768,7 @@ namespace eosio { namespace vm {
       }
 
       template <typename Visitor, typename... Args>
-      inline std::optional<operand_stack_elem> execute(host_type* host, Visitor&& visitor, uint32_t func_index, Args... args) {
+      inline std::optional<operand_stack_elem> execute(host_type* host, Visitor&& visitor, uint32_t func_index, Args&&... args) {
          EOS_VM_ASSERT(func_index < std::numeric_limits<uint32_t>::max(), wasm_interpreter_exception,
                        "cannot execute function, function not found");
 
@@ -789,8 +789,8 @@ namespace eosio { namespace vm {
             _last_op_index = last_last_op_index;
          });
 
-         this->type_check_args(_mod->get_function_type(func_index), static_cast<Args&&>(args)...);
-         push_args(args...);
+         this->type_check_args(_mod->get_function_type(func_index), std::forward<Args>(args)...); // args not modified
+         push_args(std::forward<Args>(args)...);
          push_call<true>(func_index);
 
          if (func_index < _mod->get_imported_functions_size()) {
@@ -799,7 +799,7 @@ namespace eosio { namespace vm {
             _state.pc = _mod->get_function_pc(func_index);
             setup_locals(func_index);
             vm::invoke_with_signal_handler([&]() {
-               execute(visitor);
+               execute(std::forward<Visitor>(visitor));
             }, &handle_signal, {_mod->allocator.get_code_span(),  base_type::get_wasm_allocator()->get_span()});
          }
 
@@ -840,7 +840,7 @@ namespace eosio { namespace vm {
       void push_args(Args&&... args) {
          auto tc = detail::type_converter_t<Host>{ _host, get_interface() };
          (void)tc;
-         (... , push_operand(detail::resolve_result(tc, std::move(args))));
+         (... , push_operand(detail::resolve_result(tc, std::forward<Args>(args))));
       }
 
       inline void setup_locals(uint32_t index) {
@@ -859,7 +859,7 @@ namespace eosio { namespace vm {
 
 #define CREATE_TABLE_ENTRY(NAME, CODE) &&ev_label_##NAME,
 #define CREATE_LABEL(NAME, CODE)                                                                                  \
-      ev_label_##NAME : visitor(ev_variant->template get<eosio::vm::EOS_VM_OPCODE_T(NAME)>());                    \
+      ev_label_##NAME : std::forward<Visitor>(visitor)(ev_variant->template get<eosio::vm::EOS_VM_OPCODE_T(NAME)>()); \
       ev_variant = _state.pc; \
       goto* dispatch_table[ev_variant->index()];
 #define CREATE_EXIT_LABEL(NAME, CODE) ev_label_##NAME : \

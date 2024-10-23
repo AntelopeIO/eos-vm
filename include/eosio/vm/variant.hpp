@@ -109,7 +109,7 @@ namespace eosio { namespace vm {
       union variant_storage<T0, T1, T2, T3, T...> {
          V4
          template<typename A>
-         constexpr variant_storage(A&& arg) : _tail{static_cast<A&&>(arg)} {}
+         constexpr variant_storage(A&& arg) : _tail{std::forward<A>(arg)} {}
          variant_storage<T...> _tail;
       };
       template<typename T0>
@@ -139,15 +139,15 @@ namespace eosio { namespace vm {
       template<int I, typename Storage>
       constexpr decltype(auto) variant_storage_get(Storage&& val) {
          if constexpr (I == 0) {
-            return (static_cast<Storage&&>(val)._t0);
+            return (std::forward<Storage>(val)._t0);
          } else if constexpr (I == 1) {
-            return (static_cast<Storage&&>(val)._t1);
+            return (std::forward<Storage>(val)._t1);
          } else if constexpr (I == 2) {
-            return (static_cast<Storage&&>(val)._t2);
+            return (std::forward<Storage>(val)._t2);
          } else if constexpr (I == 3) {
-            return (static_cast<Storage&&>(val)._t3);
+            return (std::forward<Storage>(val)._t3);
          } else {
-            return detail::variant_storage_get<I - 4>(static_cast<Storage&&>(val)._tail);
+            return detail::variant_storage_get<I - 4>(std::forward<Storage>(val)._tail);
          }
       }
    } // namespace detail
@@ -177,7 +177,7 @@ namespace eosio { namespace vm {
       template <typename T, typename = std::enable_if_t<detail::is_valid_alternative_v<std::decay_t<T>, Alternatives...>>>
       constexpr variant(T&& alt) :
          _which(detail::get_alternatives_index_v<std::decay_t<T>, Alternatives...>),
-         _storage(static_cast<T&&>(alt)) {
+         _storage(std::forward<T>(alt)) {
       }
 
       template <typename T,
@@ -186,10 +186,10 @@ namespace eosio { namespace vm {
 #if (defined(__GNUC__) && !defined(__clang__))
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
-         _storage = static_cast<T&&>(alt);
+         _storage = std::forward<T>(alt);
 #pragma GCC diagnostic pop
 #else
-        _storage = static_cast<T&&>(alt);
+        _storage = std::forward<T>(alt);
 #endif
          _which = detail::get_alternatives_index_v<std::decay_t<T>, Alternatives...>;
          return *this;

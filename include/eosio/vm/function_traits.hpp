@@ -69,7 +69,7 @@ namespace eosio { namespace vm {
       };
 
       template <typename T, typename U>
-      inline constexpr U&& make_dependent(U&& u) { return static_cast<U&&>(u); }
+      inline constexpr U&& make_dependent(U&& u) { return std::forward<U>(u); }
    }
 
    template <typename F>
