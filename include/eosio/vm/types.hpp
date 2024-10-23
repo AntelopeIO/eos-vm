@@ -338,7 +338,11 @@ namespace eosio { namespace vm {
       static uint32_t get_imported_functions_size_impl(const Imports& imports) {
          uint32_t number_of_imports = 0;
          const auto sz = imports.size();
-         const auto data = imports.data(); // to avoid the unnecessary size check since we iterate from 0 to sz
+         // we don't want to use `imports[i]` or `imports.at(i)` since these do an unnecessary check
+         // `EOS_VM_ASSERT(i < _size)`. The check is unnecessary since we iterate from `0` to `_size`.
+         // So get the pointer to the first element and dereference it directly.
+         // ------------------------------------------------------------------------------------------------
+         const auto data = imports.data();
          for (uint32_t i = 0; i < sz; i++) {
             if (data[i].kind == external_kind::Function)
                number_of_imports++;
