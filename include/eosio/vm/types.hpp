@@ -337,8 +337,10 @@ namespace eosio { namespace vm {
       template<typename Imports>
       static uint32_t get_imported_functions_size_impl(const Imports& imports) {
          uint32_t number_of_imports = 0;
-         for (uint32_t i = 0; i < imports.size(); i++) {
-            if (imports[i].kind == external_kind::Function)
+         const auto sz = imports.size();
+         const auto data = imports.data(); // to avoid the unnecessary size check since we iterate from 0 to sz
+         for (uint32_t i = 0; i < sz; i++) {
+            if (data[i].kind == external_kind::Function)
                number_of_imports++;
          }
          return number_of_imports;
