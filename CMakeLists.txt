@@ -2,7 +2,7 @@
 # Defines the eos-vm library and associated tooling. See docs/cmake.md for instructions on how to
 # build eos-vm or integrate with another system with CMake.
 # ##################################################################################################
-cmake_minimum_required(VERSION 3.8)
+cmake_minimum_required(VERSION 3.12)
 set(VERSION_MAJOR 1)
 set(VERSION_MINOR 0)
 set(VERSION_PATCH 0)
@@ -17,7 +17,7 @@ endif()
 
 message(STATUS "Building eos-vm v${VERSION_FULL}...")
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_EXTENSIONS ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 

@@ -1,13 +1,13 @@
 #pragma once
 
 #include <eosio/vm/exceptions.hpp>
+#include <eosio/vm/span.hpp>
 #include <eosio/vm/utils.hpp>
 
 #include <atomic>
 #include <cstdlib>
 #include <exception>
 #include <utility>
-#include <span>
 #include <signal.h>
 #include <setjmp.h>
 
@@ -18,7 +18,7 @@ namespace eosio { namespace vm {
    inline thread_local std::atomic<sigjmp_buf*> signal_dest{nullptr};
 
    __attribute__((visibility("default")))
-   inline thread_local std::vector<std::span<std::byte>> protected_memory_ranges;
+   inline thread_local std::vector<span<std::byte>> protected_memory_ranges;
 
    // Fixes a duplicate symbol build issue when building with `-fvisibility=hidden`
    __attribute__((visibility("default")))
@@ -32,7 +32,7 @@ namespace eosio { namespace vm {
       if(protected_memory_ranges.empty())
          return true;
 
-      for(const std::span<std::byte>& range : protected_memory_ranges) {
+      for(const span<std::byte>& range : protected_memory_ranges) {
          if(addr >= range.data() && addr < range.data() + range.size())
             return true;
       }
@@ -139,7 +139,7 @@ namespace eosio { namespace vm {
    // It's unlikely, but I'm not sure that it can definitely be ruled out if both
    // this and f are inlined and f modifies locals from the caller.
    template<typename F, typename E>
-   [[gnu::noinline]] auto invoke_with_signal_handler(F&& f, E&& e, const std::vector<std::span<std::byte>>& protect_ranges) {
+   [[gnu::noinline]] auto invoke_with_signal_handler(F&& f, E&& e, const std::vector<span<std::byte>>& protect_ranges) {
       setup_signal_handler();
       sigjmp_buf dest;
       sigjmp_buf* volatile old_signal_handler = nullptr;

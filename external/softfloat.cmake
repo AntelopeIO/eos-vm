@@ -1,6 +1,3 @@
-cmake_minimum_required(VERSION 3.8)
-project(softfloat)
-
 set(SOFTFLOAT_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/softfloat)
 set(SOFTFLOAT_SRC ${SOFTFLOAT_ROOT}/source)
 set(SOFTFLOAT_BUILD ${SOFTFLOAT_ROOT}/build)
