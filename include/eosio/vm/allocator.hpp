@@ -2,6 +2,7 @@
 
 #include <eosio/vm/constants.hpp>
 #include <eosio/vm/exceptions.hpp>
+#include <eosio/vm/span.hpp>
 
 #include <cassert>
 #include <cstddef>
@@ -9,7 +10,6 @@
 #include <cstring>
 #include <map>
 #include <set>
-#include <span>
 #include <memory>
 #include <mutex>
 #include <utility>
@@ -373,7 +373,7 @@ namespace eosio { namespace vm {
 
       const void* get_code_start() const { return _code_base; }
 
-      std::span<std::byte> get_code_span() const {return {(std::byte*)_code_base, _code_size};}
+      span<std::byte> get_code_span() const {return {(std::byte*)_code_base, _code_size};}
 
       /* different semantics than free,
        * the memory must be at the end of the most recently allocated block.
@@ -528,6 +528,6 @@ namespace eosio { namespace vm {
       inline int32_t get_current_page() const { return page; }
       bool is_in_region(char* p) { return p >= raw && p < raw + max_memory; }
 
-      std::span<std::byte> get_span() const {return {(std::byte*)raw, max_memory};}
+      span<std::byte> get_span() const {return {(std::byte*)raw, max_memory};}
    };
 }} // namespace eosio::vm
