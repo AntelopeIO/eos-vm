@@ -305,20 +305,21 @@ namespace eosio { namespace vm {
 
       template<typename Watchdog, typename F>
       inline void timed_run(Watchdog&& wd, F&& f) {
-         std::atomic<bool>       _timed_out = false;
+         std::atomic<bool>&      _timed_out = timed_run_is_timed_out;
          auto reenable_code = scope_guard{[&](){
-            if (_timed_out) {
+            if (_timed_out.load(std::memory_order_acquire)) {
                mod->allocator.enable_code(Impl::is_jit);
+               _timed_out.store(false, std::memory_order_release);
             }
          }};
          try {
             auto wd_guard = wd.scoped_run([this,&_timed_out]() {
-               _timed_out = true;
+               _timed_out.store(true, std::memory_order_release);
                mod->allocator.disable_code();
             });
             static_cast<F&&>(f)();
          } catch(wasm_memory_exception&) {
-            if (_timed_out) {
+            if (_timed_out.load(std::memory_order_acquire)) {
                throw timeout_exception{ "execution timed out" };
             } else {
                throw;
