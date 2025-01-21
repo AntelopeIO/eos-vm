@@ -15,7 +15,7 @@ TEST_CASE("Testing signals", "[invoke_with_signal_handler]") {
          std::raise(SIGSEGV);
       }, [](int sig) {
          throw test_exception{};
-      }, {});
+      }, {}, {});
    } catch(test_exception&) {
       okay = true;
    }
@@ -25,7 +25,7 @@ TEST_CASE("Testing signals", "[invoke_with_signal_handler]") {
 TEST_CASE("Testing throw", "[signal_handler_throw]") {
    CHECK_THROWS_AS(eosio::vm::invoke_with_signal_handler([](){
       eosio::vm::throw_<eosio::vm::wasm_exit_exception>( "Exiting" );
-   }, [](int){}, {}), eosio::vm::wasm_exit_exception);
+   }, [](int){}, {}, {}), eosio::vm::wasm_exit_exception);
 }
 
 static volatile sig_atomic_t sig_handled;
