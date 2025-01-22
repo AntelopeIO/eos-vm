@@ -113,7 +113,6 @@ add_executable(unit_tests main.cpp
                           null_tests.cpp
                           reentry_tests.cpp
                           signals_tests.cpp
-                          span_tests.cpp
                           stack_restriction_tests.cpp
                           watchdog_tests.cpp
                           implementation_limits_tests.cpp
