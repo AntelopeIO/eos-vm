@@ -49,10 +49,15 @@ namespace eosio { namespace vm {
 
          //a failure in the code range...
          if (addr >= code_memory_range.data() && addr < code_memory_range.data() + code_memory_range.size()) {
-            //a SEGV in the code range when timed_run_has_timed_out=false is due to a _different_ thread's execution activating a deadline
+            //a SEGV/BUS in the code range when timed_run_has_timed_out=false is due to a _different_ thread's execution activating a deadline
             // timer. Return and retry executing the same code again. Eventually timed_run() on the other thread will reset the page
             // permissions and progress on this thread can continue
-            if (sig == SIGSEGV && timed_run_has_timed_out.load(std::memory_order_acquire) == false)
+#ifdef __linux__
+            const int sig_on_prot_none_access = SIGSEGV;
+#else  //macos, *bsd
+            const int sig_on_prot_none_access = SIGBUS;
+#endif
+            if (sig == sig_on_prot_none_access && timed_run_has_timed_out.load(std::memory_order_acquire) == false)
                return;
             //otherwise, jump out
             siglongjmp(*dest, sig);
