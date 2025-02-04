@@ -52,12 +52,8 @@ namespace eosio { namespace vm {
             //a SEGV/BUS in the code range when timed_run_has_timed_out=false is due to a _different_ thread's execution activating a deadline
             // timer. Return and retry executing the same code again. Eventually timed_run() on the other thread will reset the page
             // permissions and progress on this thread can continue
-#ifdef __linux__
-            const int sig_on_prot_none_access = SIGSEGV;
-#else  //macos, *bsd
-            const int sig_on_prot_none_access = SIGBUS;
-#endif
-            if (sig == sig_on_prot_none_access && timed_run_has_timed_out.load(std::memory_order_acquire) == false)
+            //on linux no SIGBUS handler is registered (see setup_signal_handler_impl()) so it will never occur here
+            if ((sig == SIGSEGV || sig == SIGBUS) && timed_run_has_timed_out.load(std::memory_order_acquire) == false)
                return;
             //otherwise, jump out
             siglongjmp(*dest, sig);
