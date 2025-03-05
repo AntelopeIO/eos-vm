@@ -528,6 +528,9 @@ namespace eosio { namespace vm {
       inline int32_t get_current_page() const { return page; }
       bool is_in_region(char* p) { return p >= raw && p < raw + max_memory; }
 
-      span<std::byte> get_span() const {return {(std::byte*)raw, max_memory};}
+      span<std::byte> get_span() const {
+         const std::size_t syspagesize = static_cast<std::size_t>(::sysconf(_SC_PAGESIZE));
+         return {(std::byte*)raw - syspagesize, max_memory + 2*syspagesize};
+      }
    };
 }} // namespace eosio::vm
