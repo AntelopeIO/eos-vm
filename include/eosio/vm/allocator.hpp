@@ -488,6 +488,11 @@ namespace eosio { namespace vm {
          raw += syspagesize;
          page = 0;
       }
+      ~wasm_allocator() {
+         if (raw) {
+            free();
+         }
+      }
       // Initializes the memory controlled by the allocator.
       //
       // \post get_current_page() == new_pages
