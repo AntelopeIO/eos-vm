@@ -491,6 +491,7 @@ namespace eosio { namespace vm {
       ~wasm_allocator() {
          if (raw) {
             free();
+            raw = nullptr;
          }
       }
       // Initializes the memory controlled by the allocator.
