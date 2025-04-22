@@ -475,10 +475,6 @@ namespace eosio { namespace vm {
          int err = mprotect(raw + (page_size * page), (page_size * size), PROT_NONE);
          EOS_VM_ASSERT(err == 0, wasm_bad_alloc, "mprotect failed");
       }
-      void free() {
-         std::size_t syspagesize = static_cast<std::size_t>(::sysconf(_SC_PAGESIZE));
-         munmap(raw - syspagesize, max_memory + 2*syspagesize);
-      }
       wasm_allocator() {
          std::size_t syspagesize = static_cast<std::size_t>(::sysconf(_SC_PAGESIZE));
          raw  = (char*)mmap(NULL, max_memory + 2*syspagesize, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
@@ -489,10 +485,8 @@ namespace eosio { namespace vm {
          page = 0;
       }
       ~wasm_allocator() {
-         if (raw) {
-            free();
-            raw = nullptr;
-         }
+         std::size_t syspagesize = static_cast<std::size_t>(::sysconf(_SC_PAGESIZE));
+         munmap(raw - syspagesize, max_memory + 2*syspagesize); // raw is never null after wasm_allocator is constructed
       }
       // Initializes the memory controlled by the allocator.
       //
