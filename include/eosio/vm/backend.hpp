@@ -173,7 +173,7 @@ namespace eosio { namespace vm {
             // First pass: finds max size of memory required by parsing.
             {
                // Memory used by this pass is freed when going out of the scope
-               module first_pass_module;
+               vm::module first_pass_module;
                first_pass_module.allocator.use_default_memory();
                parser_t{ first_pass_module.allocator, options }.parse_module2(ptr, sz, first_pass_module, debug);
                first_pass_module.finalize();
