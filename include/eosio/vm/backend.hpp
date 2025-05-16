@@ -21,7 +21,6 @@
 #include <string_view>
 #include <system_error>
 #include <vector>
-#include <type_traits>
 
 namespace eosio { namespace vm {
 
@@ -322,13 +321,7 @@ namespace eosio { namespace vm {
                _timed_out.store(true, std::memory_order_release);
                mod->allocator.disable_code();
             });
-
-            using return_type = std::invoke_result_t<F>;
-            if constexpr (std::is_void_v<return_type>) {
-               std::forward<F>(f)();
-            } else {
-               return std::forward<F>(f)();
-            }
+            return std::forward<F>(f)();
          } catch(wasm_memory_exception&) {
             if (_timed_out.load(std::memory_order_acquire)) {
                throw timeout_exception{ "execution timed out" };
