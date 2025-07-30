@@ -304,7 +304,7 @@ namespace eosio { namespace vm {
       }
 
       template<typename Watchdog, typename F>
-      inline void timed_run(Watchdog&& wd, F&& f) {
+      inline auto timed_run(Watchdog&& wd, F&& f) {
          //timed_run_has_timed_out -- declared in signal handling code because signal handler needs to inspect it on a SEGV too -- is a thread local
          // so that upon a SEGV the signal handling code can discern if the thread that caused the SEGV has a timed_run that has timed out. This
          // thread local also need to be an atomic because the thread that a Watchdog callback will be called from may not be the same as the
@@ -321,7 +321,7 @@ namespace eosio { namespace vm {
                _timed_out.store(true, std::memory_order_release);
                mod->allocator.disable_code();
             });
-            std::forward<F>(f)();
+            return std::forward<F>(f)();
          } catch(wasm_memory_exception&) {
             if (_timed_out.load(std::memory_order_acquire)) {
                throw timeout_exception{ "execution timed out" };
