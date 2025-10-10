@@ -216,13 +216,13 @@ namespace eosio { namespace vm {
       }
 
       template <typename... Args>
-      inline auto operator()(host_t& host, const std::string_view& mod, const std::string_view& func, Args... args) {
-         return call(host, mod, func, args...);
+      inline auto operator()(host_t& host, const std::string_view& mod, const std::string_view& func, Args&&... args) {
+         return call(host, mod, func, std::forward<Args>(args)...);
       }
 
       template <typename... Args>
-      inline bool operator()(const std::string_view& mod, const std::string_view& func, Args... args) {
-         return call(mod, func, args...);
+      inline bool operator()(const std::string_view& mod, const std::string_view& func, Args&&... args) {
+         return call(mod, func, std::forward<Args>(args)...);
       }
 
       // Only dynamic options matter.  Parser options will be ignored.
