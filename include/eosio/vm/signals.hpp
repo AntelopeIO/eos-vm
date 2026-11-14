@@ -129,7 +129,7 @@ namespace eosio { namespace vm {
       sa.sa_sigaction = &signal_handler;
       sigemptyset(&sa.sa_mask);
       sigaddset(&sa.sa_mask, SIGPROF);
-      sa.sa_flags = SA_NODEFER | SA_SIGINFO;
+      sa.sa_flags = SA_NODEFER | SA_SIGINFO | SA_ONSTACK;
       sigaction(SIGSEGV, &sa, &prev_signal_handler<SIGSEGV>);
 #ifndef __linux__
       sigaction(SIGBUS, &sa, &prev_signal_handler<SIGBUS>);
